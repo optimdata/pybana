@@ -1,0 +1,21 @@
+language: python
+
+python:
+    - 3.6
+
+services:
+  - elasticsearch
+
+before_install:
+  - curl -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.7.1.deb && sudo dpkg -i --force-confnew elasticsearch-6.7.1.deb && sudo service elasticsearch start
+
+script:
+  - while ! nc -z 127.0.0.1 9200; do sleep 1; done;
+  - pip install --upgrade pip
+  - pip install -r requirements.txt
+
+  - mkdir -p shippable/codecoverage
+  - flake8 .
+  - black --check .
+  - pytest
+  - coverage xml -o shippable/codecoverage/coverage.xml

@@ -48,7 +48,7 @@ def test_client():
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations())
-    assert len(visualizations) == 3
+    assert len(visualizations) == 4
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.state()
     assert visualization.index().meta.id == index_pattern.meta.id
