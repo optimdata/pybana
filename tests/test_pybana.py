@@ -8,7 +8,7 @@ import os
 import pytz
 import sys
 
-BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "../src")  # NOQA
+BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
 from pybana import Kibana, ElasticTranslator, Scope
