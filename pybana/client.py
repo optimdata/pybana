@@ -22,9 +22,7 @@ DEFAULT_CONFIG = {
 
 class Kibana:
     """
-        Client for kibana.
-
-        Every interaction with kibana should be implemented here.
+    Kibana client.
     """
 
     def __init__(self, index=".kibana"):
@@ -59,9 +57,9 @@ class Kibana:
 
     def init_config(self):
         """
-            Create the config document that each kibana requires. This
-            document stores all the settings such as timepicker defaults,
-            date formats etc
+        Create the config document that each kibana requires. This
+        document stores all the settings such as timepicker defaults,
+        date formats etc
         """
         try:
             self.config()
@@ -71,27 +69,45 @@ class Kibana:
             )
 
     def index_patterns(self):
+        """
+        Return a Search to all the index-patterns.
+        """
         return self.objects("index-pattern")
 
     def index_pattern(self, id):
+        """
+        Return a index-pattern identified by its identifier.
+        """
         return self._get(IndexPattern, f"index-pattern:{id}")
 
     def visualizations(self):
+        """
+        Return a Search to all the visualizations.
+        """
         return self.objects("visualization")
 
     def visualization(self, id):
+        """
+        Return a visualization identified by its identifier.
+        """
         return self._get(Visualization, f"visualization:{id}")
 
     def dashboards(self):
+        """
+        Return a Search to all the dashboards.
+        """
         return self.objects("dashboard")
 
     def dashboard(self, id):
+        """
+        Return a dashboard identified by its identifier.
+        """
         return self._get(Dashboard, f"dashboard:{id}")
 
     def update_or_create_default_index_pattern(self, index_pattern):
         """
-            If config document does not have index pattern, associate the
-            first index pattern found.
+        If config document does not have index pattern, associate the
+        first index pattern found.
         """
         config = self.config()
         if not config.config.to_dict().get("defaultIndex"):
