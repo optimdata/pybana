@@ -4,6 +4,8 @@
 [![codecov](https://codecov.io/gh/optimdata/pybana/branch/master/graph/badge.svg)](https://codecov.io/gh/optimdata/pybana)
 ![](https://img.shields.io/badge/python-3.6-brightgreen.svg)
 
+# 🚧 CAREFUL! WORK IN PROGRESS 🚧
+
 ## What is this?
 
 This is a kibana client written in python. It provides two kind of utilities
