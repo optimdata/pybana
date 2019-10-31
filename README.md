@@ -1,6 +1,7 @@
 # pybana
 
 [![Build Status](https://travis-ci.org/optimdata/pybana.svg?branch=master)](https://travis-ci.org/optimdata/pybana)
+[![codecov](https://codecov.io/gh/optimdata/pybana/branch/master/graph/badge.svg)](https://codecov.io/gh/optimdata/pybana)
 ![](https://img.shields.io/badge/python-3.6-brightgreen.svg)
 
 ## What is this?

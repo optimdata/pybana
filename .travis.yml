@@ -15,7 +15,6 @@ script:
   - pip install -r requirements.txt
   - pip install codecov==2.0.9
 
-  - mkdir -p travis/codecoverage
   - flake8 .
   - black --check .
   - pytest
