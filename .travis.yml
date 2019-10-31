@@ -14,7 +14,7 @@ script:
   - while ! nc -z 127.0.0.1 9200; do sleep 1; done;
   - pip install --upgrade pip
   - pip install -r requirements.txt
-  - pip install codecov==2.0.9
+  - pip install -r requirements-dev.txt
 
   - flake8 .
   - black --check .
