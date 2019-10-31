@@ -48,7 +48,7 @@ def test_client():
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations())
-    assert len(visualizations) == 4
+    assert len(visualizations) == 9
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.state()
     assert visualization.index().meta.id == index_pattern.meta.id
@@ -67,7 +67,6 @@ def test_elastic_translator():
         datetime.datetime(2019, 1, 2, tzinfo=pytz.utc),
         pytz.utc,
     )
-    visualization = kibana.visualization("695c02f0-fb1a-11e9-84e4-078763638bf3")
-    translator.translate(visualization, scope)
-    visualization = kibana.visualization("bd79ac20-fb1a-11e9-84e4-078763638bf3")
-    translator.translate(visualization, scope)
+    for visualization in kibana.visualizations():
+        if visualization.state()["type"] in ("histogram", "metric"):
+            translator.translate(visualization, scope)
