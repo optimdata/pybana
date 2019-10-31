@@ -1,5 +1,8 @@
 # pybana
 
+[![Build Status](https://travis-ci.org/optimdata/pybana.svg?branch=master)](https://travis-ci.org/optimdata/pybana)
+![](https://img.shields.io/badge/python-3.6-brightgreen.svg)
+
 ## What is this?
 
 This is a kibana client written in python. It provides two kind of utilities

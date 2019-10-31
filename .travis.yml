@@ -13,9 +13,13 @@ script:
   - while ! nc -z 127.0.0.1 9200; do sleep 1; done;
   - pip install --upgrade pip
   - pip install -r requirements.txt
+  - pip install codecov==2.0.9
 
-  - mkdir -p shippable/codecoverage
+  - mkdir -p travis/codecoverage
   - flake8 .
   - black --check .
   - pytest
-  - coverage xml -o shippable/codecoverage/coverage.xml
+  - coverage xml -o coverage.xml
+
+after_success:
+  - codecov -t 8467f17f-e0d1-429d-93f6-8336ccab8248
