@@ -3,9 +3,9 @@
 import json
 
 from elasticsearch import NotFoundError
-from elasticsearch_dsl import Search, connections
+import elasticsearch_dsl
 
-from .models import Config, Dashboard, IndexPattern, Visualization
+from .models import Config, Dashboard, IndexPattern, Visualization, Search
 
 __all__ = ("Kibana",)
 
@@ -38,8 +38,9 @@ class Kibana:
             "dashboard": Dashboard.search,
             "visualization": Visualization.search,
             "index-pattern": IndexPattern.search,
+            "search": Search.search,
         }
-        return search_classes.get(type, Search)(index=self._index)
+        return search_classes.get(type, elasticsearch_dsl.Search)(index=self._index)
 
     def _get(self, klass, id):
         ret = klass.get(index=self._index, id=id)
@@ -49,7 +50,7 @@ class Kibana:
         return self._search(type).filter("term", type=type)
 
     def config_id(self):
-        elastic = connections.get_connection()
+        elastic = elasticsearch_dsl.connections.get_connection()
         return "config:%s" % elastic.info()["version"]["number"]
 
     def config(self):
@@ -79,6 +80,18 @@ class Kibana:
         Return a index-pattern identified by its identifier.
         """
         return self._get(IndexPattern, f"index-pattern:{id}")
+
+    def searches(self):
+        """
+        Return a Search to all the index-patterns.
+        """
+        return self.objects("search")
+
+    def search(self, id):
+        """
+        Return a index-pattern identified by its identifier.
+        """
+        return self._get(Search, f"search:{id}")
 
     def visualizations(self):
         """

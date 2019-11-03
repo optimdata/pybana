@@ -10,7 +10,7 @@ def dumpindex(elastic, index, fn):
     Helper which dump a whole db and returns in a format handled by bulk api
     """
     search = Search(using=elastic, index=index).filter(
-        "terms", type=["index-pattern", "visualization", "dashboard"]
+        "terms", type=["index-pattern", "visualization", "dashboard", "search"]
     )
     with open(fn, "w+") as fd:
         for doc in search.scan():

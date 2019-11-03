@@ -48,7 +48,7 @@ def test_client():
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations())
-    assert len(visualizations) == 9
+    assert len(visualizations) == 10
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.state()
     assert visualization.index().meta.id == index_pattern.meta.id
@@ -56,6 +56,12 @@ def test_client():
     assert len(dashboards) == 1
     dashboard = kibana.dashboard("f57a7160-fb18-11e9-84e4-078763638bf3")
     assert len(dashboard.visualizations()) == 2
+    visualization = kibana.visualization("f4a09a00-fe77-11e9-8c18-250a1adff826")
+    search = visualization.related_search()
+    assert search.meta.id == "search:2139a4e0-fe77-11e9-833a-0fef2d7dd143"
+    assert len(list(kibana.searches())) == 1
+    search = kibana.search("2139a4e0-fe77-11e9-833a-0fef2d7dd143")
+    assert visualization.index().meta.id == index_pattern.meta.id
 
 
 def test_elastic_translator():
