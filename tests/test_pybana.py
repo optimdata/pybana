@@ -16,6 +16,7 @@ from pybana.translators.elastic.buckets import (
     format_from_interval,
     compute_auto_interval,
 )
+from pybana.helpers import VegaRenderer
 
 PYBANA_INDEX = ".kibana_pybana_test"
 elastic = elasticsearch.Elasticsearch()
@@ -115,3 +116,8 @@ def test_elastic_translator_helpers():
     assert f(seconds=600) == "10s"
     assert f(seconds=240) == "5s"
     assert f(seconds=1) == "1s"
+
+
+def test_vega_renderer():
+    renderer = VegaRenderer()
+    renderer.to_svg({"$schema": "https://vega.github.io/schema/vega/v5.json"})

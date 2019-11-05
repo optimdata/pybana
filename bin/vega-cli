@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+
+var _ = require('lodash');
+var vega = require('vega');
+
+let data = '';
+process.stdin.setEncoding('utf8');
+
+process.stdin.on('readable', () => {
+  let chunk;
+  while ((chunk = process.stdin.read()) !== null) {
+    data += chunk;
+  }
+});
+
+process.stdin.on('end', () => {
+  data = JSON.parse(_.trim(data));
+  var view = new vega.View(vega.parse(data), { renderer: 'none' });
+  view.toSVG().then(function(svg) {
+    process.stdout.write(svg);
+  });
+});
