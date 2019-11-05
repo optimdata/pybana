@@ -725,13 +725,13 @@ class VegaTranslator:
         conf["marks"] = marks
         return conf
 
-    def translate(self, visualization, response, scope):
+    def translate(self, visualization, response, context):
         """
         Transform a kibana visualization object and an elasticsearch_dsl response into a vega object.
 
         :param elasticsearch_dsl.Document visualization: Visualization fetched from a kibana index.
         :param elasticsearch_dsl.response.Response visualization: Visualization fetched from a kibana index.
-        :param scope Scope: A scope is a object with beg (datetime), end (datetime) and tzinfo (pytz.timezone).
+        :param context Context: A context is a object with beg (datetime), end (datetime) and tzinfo (pytz.timezone).
         """
         state = State(
             {

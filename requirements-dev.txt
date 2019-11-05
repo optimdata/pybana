@@ -4,4 +4,6 @@ coverage==4.5.3
 flake8==3.7.7
 pytest==4.3.1
 pytest-cov==2.6.1
+recommonmark==0.6.0
+sphinx==1.8.5
 twine==2.0.0

@@ -4,6 +4,9 @@
 [![codecov](https://codecov.io/gh/optimdata/pybana/branch/master/graph/badge.svg)](https://codecov.io/gh/optimdata/pybana)
 ![](https://img.shields.io/badge/python-3.6-brightgreen.svg)
 
+- [Github](https://github.com/optimdata/pybana)
+- [Documentation](https://pybana.readthedocs.io/en/latest/index.html)
+
 # 🚧 CAREFUL! WORK IN PROGRESS 🚧
 
 ## What is this?
@@ -33,7 +36,7 @@ The vega translator tries to provide an equivalent in vega of kibana visualisati
 ## Roadmap
 
 - ORM
-  - Handle more types like `search`…
+  - Automatic creation of index pattern
 - Elastic translator:
   - Handle more bucket type: ipv4, significatn terms etc
   - Handle more metrics: top hit, sibling etc
