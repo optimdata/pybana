@@ -11,19 +11,18 @@ import sys
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
-from pybana import Kibana, ElasticTranslator, Scope
+from pybana import Kibana, ElasticTranslator, Scope, VegaTranslator, VegaRenderer
 from pybana.translators.elastic.buckets import (
     format_from_interval,
     compute_auto_interval,
 )
-from pybana.helpers import VegaRenderer
 
 PYBANA_INDEX = ".kibana_pybana_test"
 elastic = elasticsearch.Elasticsearch()
 elasticsearch_dsl.connections.add_connection("default", elastic)
 
 
-def loadfixtures(elastic, index):
+def load_fixtures(elastic, index):
     if elastic.indices.exists(index):
         elastic.indices.delete(index)
     datafn = os.path.join(BASE_DIRECTORY, "pybana/index.json")
@@ -42,8 +41,45 @@ def loadfixtures(elastic, index):
     elasticsearch.helpers.bulk(elastic, actions(), refresh="wait_for")
 
 
+def load_data(elastic, index):
+    ts = datetime.datetime(2019, 1, 1)
+    if elastic.indices.exists(index):
+        elastic.indices.delete(index)
+    elastic.indices.create(
+        index,
+        body={
+            "mappings": {
+                "doc": {
+                    "properties": {
+                        "s": {"type": "keyword"},
+                        "i": {"type": "integer"},
+                        "f": {"type": "float"},
+                        "ts": {"type": "date"},
+                    }
+                }
+            }
+        },
+    )
+
+    def actions():
+        for i in range(100):
+            yield {
+                "_index": index,
+                "_type": "doc",
+                "_id": str(i),
+                "_source": {
+                    "ts": ts + datetime.timedelta(hours=i),
+                    "f": float(i),
+                    "i": i,
+                    "s": chr(100 + (i % 10)),
+                },
+            }
+
+    elasticsearch.helpers.bulk(elastic, actions(), refresh="wait_for")
+
+
 def test_client():
-    loadfixtures(elastic, PYBANA_INDEX)
+    load_fixtures(elastic, PYBANA_INDEX)
     kibana = Kibana(PYBANA_INDEX)
     kibana.init_config()
     kibana.init_config()
@@ -52,8 +88,8 @@ def test_client():
     index_pattern = kibana.index_pattern("6c172f80-fb13-11e9-84e4-078763638bf3")
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
-    visualizations = list(kibana.visualizations())
-    assert len(visualizations) == 10
+    visualizations = list(kibana.visualizations().scan())
+    assert len(visualizations) == 20
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.state()
     assert visualization.index().meta.id == index_pattern.meta.id
@@ -69,18 +105,40 @@ def test_client():
     assert visualization.index().meta.id == index_pattern.meta.id
 
 
-def test_elastic_translator():
-    loadfixtures(elastic, PYBANA_INDEX)
+def test_translators():
+    load_fixtures(elastic, PYBANA_INDEX)
+    load_data(elastic, "pybana")
     kibana = Kibana(PYBANA_INDEX)
     translator = ElasticTranslator()
     scope = Scope(
         datetime.datetime(2019, 1, 1, tzinfo=pytz.utc),
-        datetime.datetime(2019, 1, 2, tzinfo=pytz.utc),
+        datetime.datetime(2019, 1, 3, tzinfo=pytz.utc),
         pytz.utc,
     )
-    for visualization in kibana.visualizations():
-        if visualization.state()["type"] in ("histogram", "metric"):
-            translator.translate(visualization, scope)
+    for visualization in kibana.visualizations().scan():
+        if visualization.state()["type"] in ("histogram", "metric", "pie", "line"):
+            search = translator.translate(visualization, scope)
+            if visualization.meta.id.split(":")[-1] in (
+                "695c02f0-fb1a-11e9-84e4-078763638bf3",
+                "1c7226e0-ffd9-11e9-b6bd-4d907ad3c29d",
+                "cdecdff0-ffd9-11e9-b6bd-4d907ad3c29d",
+                "fa5fcfc0-ffd9-11e9-b6bd-4d907ad3c29d",
+                "3e6c9e50-ffda-11e9-b6bd-4d907ad3c29d",
+                "65881000-ffda-11e9-b6bd-4d907ad3c29d",
+                "5fa0ea20-ffdc-11e9-b6bd-4d907ad3c29d",
+                "86457e20-ffdc-11e9-b6bd-4d907ad3c29d",
+                "ad4b9310-ffdc-11e9-b6bd-4d907ad3c29d",
+                "e19d9640-ffdc-11e9-b6bd-4d907ad3c29d",
+                "2fb77bc0-ffdd-11e9-b6bd-4d907ad3c29d",
+            ):
+                response = search.execute()
+                # print(visualization)
+                # print(visualization.index())
+                # print(search.to_dict())
+                # print(response.to_dict())
+                VegaTranslator().translate(visualization, response, scope)
+
+    # assert 0
 
 
 def test_elastic_translator_helpers():

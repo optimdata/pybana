@@ -20,9 +20,12 @@ class ElasticTranslator:
         :param elasticsearch_dsl.Document visualization: Visualization fetched from a kibana index.
         :param scope Scope: A scope is a object with beg (datetime), end (datetime) and tzinfo (pytz.timezone).
         """
-        index = visualization.index()["index-pattern"]["title"]
+        index_pattern = visualization.index()
+        index = index_pattern["index-pattern"]["title"]
+        ts = index_pattern["index-pattern"]["timeFieldName"]
         search = elasticsearch_dsl.Search(index=index).filter(
-            "range", ts_beg={"gte": scope.beg.isoformat(), "lte": scope.end.isoformat()}
+            "range",
+            **{ts: {"gte": scope.beg.isoformat(), "lte": scope.end.isoformat()}}
         )
         state = json.loads(visualization.visualization["visState"])
         segment_aggs = [

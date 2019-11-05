@@ -45,9 +45,6 @@ def percentage(num, den):
 
 
 class BaseMetric:
-    def label(self, agg):
-        return "metric" + agg["id"]
-
     def contribute(self, agg, bucket, response):
         return (bucket or response["aggregations"])[agg["id"]]["value"]
 
@@ -65,6 +62,10 @@ class CountMetric(BaseMetric):
 
 class AverageMetric(BaseMetric):
     aggtype = "avg"
+
+
+class MedianMetric(BaseMetric):
+    aggtype = "median"
 
 
 class MinMetric(BaseMetric):
@@ -89,6 +90,7 @@ METRICS = {
         AverageMetric,
         CountMetric,
         MaxMetric,
+        MedianMetric,
         MinMetric,
         SumMetric,
         CardinalityMetric,
@@ -108,9 +110,6 @@ class State:
 
     def type(self):
         return self._state["type"]
-
-    def agg(self, aggid):
-        return [agg for agg in self._state["aggs"] if agg["id"] == aggid][0]
 
     def series_params(self, agg):
         return [
@@ -185,9 +184,6 @@ class State:
     def stacked_applied(self, ax):
         return self.metrics_stacked(ax) or self.groups_stacked(ax)
 
-    def faceted(self):
-        return False
-
     def valueax(self, axid):
         return [ax for ax in self.valueaxes() if ax["id"] == axid][0]
 
@@ -210,12 +206,6 @@ class State:
 
 
 class VegaTranslator:
-    def _mark_encode_enter(self, typ, field):
-        return {
-            "histogram": {"fill": {"scale": "color", "field": field}},
-            "line": {"stroke": {"scale": "color", "field": field}},
-        }[typ]
-
     def conf(self, state):
         return {
             "$schema": "https://vega.github.io/schema/vega/v5.json",
@@ -727,11 +717,10 @@ class VegaTranslator:
         marks = []
 
         for ax in state.valueaxes():
-            if state.valueaxtype(ax) == "histogram":
-                marks.extend(self._marks_histogram(state, ax))
-
-            elif state.valueaxtype(ax) == "line":
-                marks.extend(self._marks_line(state, ax))
+            handler = {"histogram": self._marks_histogram, "line": self._marks_line}[
+                state.valueaxtype(ax)
+            ]
+            marks.extend(handler(state, ax))
 
         conf["marks"] = marks
         return conf
