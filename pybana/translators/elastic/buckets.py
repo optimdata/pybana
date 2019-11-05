@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import json
 
 """
@@ -17,7 +19,35 @@ def compute_auto_interval(interval, beg, end):
     Compute the automatic interval
     """
     if interval == "auto":
-        return "30m"
+        delta = end - beg
+        if delta.days >= 2 * 365:  # 2years
+            return "30d"
+        elif delta.days >= 365:
+            return "1w"
+        elif delta.days >= 48:
+            return "1d"
+        elif delta.days >= 12:
+            return "12h"
+        elif delta.days >= 4:
+            return "3h"
+        elif delta.total_seconds() >= 36 * 3600:
+            return "1h"
+        elif delta.total_seconds() >= 16 * 3600:
+            return "30m"
+        elif delta.total_seconds() >= 8 * 3600:
+            return "10m"
+        elif delta.total_seconds() >= 2 * 3600:
+            return "5m"
+        elif delta.total_seconds() >= 36 * 60:
+            return "1m"
+        elif delta.total_seconds() >= 12 * 60:
+            return "30s"
+        elif delta.total_seconds() >= 6 * 60:
+            return "10s"
+        elif delta.total_seconds() >= 4 * 60:
+            return "5s"
+        else:
+            return "1s"
     return f"1{interval}"
 
 

@@ -12,6 +12,10 @@ BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
 from pybana import Kibana, ElasticTranslator, Scope
+from pybana.translators.elastic.buckets import (
+    format_from_interval,
+    compute_auto_interval,
+)
 
 PYBANA_INDEX = ".kibana_pybana_test"
 elastic = elasticsearch.Elasticsearch()
@@ -76,3 +80,38 @@ def test_elastic_translator():
     for visualization in kibana.visualizations():
         if visualization.state()["type"] in ("histogram", "metric"):
             translator.translate(visualization, scope)
+
+
+def test_elastic_translator_helpers():
+    assert format_from_interval("1y") == "yyyy"
+    assert format_from_interval("1q") == "yyyy-MM"
+    assert format_from_interval("1M") == "yyyy-MM"
+    assert format_from_interval("1d") == "yyyy-MM-dd"
+    assert format_from_interval("1h") == "yyyy-MM-dd'T'HH'h'"
+    assert format_from_interval("1s") == "date_time"
+
+    assert (
+        compute_auto_interval("d", datetime.datetime.now(), datetime.datetime.now())
+        == "1d"
+    )
+
+    def f(*args, **kwargs):
+        delta = datetime.timedelta(*args, **kwargs)
+        end = datetime.datetime.now()
+        beg = end - delta
+        return compute_auto_interval("auto", beg, end)
+
+    assert f(days=800) == "30d"
+    assert f(days=400) == "1w"
+    assert f(days=50) == "1d"
+    assert f(days=20) == "12h"
+    assert f(days=5) == "3h"
+    assert f(days=2) == "1h"
+    assert f(days=1) == "30m"
+    assert f(seconds=43000) == "10m"
+    assert f(seconds=13000) == "5m"
+    assert f(seconds=3600) == "1m"
+    assert f(seconds=1200) == "30s"
+    assert f(seconds=600) == "10s"
+    assert f(seconds=240) == "5s"
+    assert f(seconds=1) == "1s"
