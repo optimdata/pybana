@@ -25,6 +25,13 @@ class Kibana:
     Kibana client.
     """
 
+    klasses = {
+        "dashboard": Dashboard,
+        "visualization": Visualization,
+        "index-pattern": IndexPattern,
+        "search": Search,
+    }
+
     def __init__(self, index=".kibana"):
         """
         Initialize a client to kibana.
@@ -34,13 +41,9 @@ class Kibana:
         self._index = index
 
     def _search(self, type):
-        search_classes = {
-            "dashboard": Dashboard.search,
-            "visualization": Visualization.search,
-            "index-pattern": IndexPattern.search,
-            "search": Search.search,
-        }
-        return search_classes.get(type, elasticsearch_dsl.Search)(index=self._index)
+        klass = self.klasses.get(type)
+        search = klass.search if klass else elasticsearch_dsl.Search
+        return search(index=self._index)
 
     def _get(self, klass, id):
         ret = klass.get(index=self._index, id=id)
@@ -79,7 +82,7 @@ class Kibana:
         """
         Return a index-pattern identified by its identifier.
         """
-        return self._get(IndexPattern, f"index-pattern:{id}")
+        return self._get(self.klasses["index-pattern"], f"index-pattern:{id}")
 
     def searches(self):
         """
@@ -91,7 +94,7 @@ class Kibana:
         """
         Return a index-pattern identified by its identifier.
         """
-        return self._get(Search, f"search:{id}")
+        return self._get(self.klasses["search"], f"search:{id}")
 
     def visualizations(self):
         """
@@ -103,7 +106,7 @@ class Kibana:
         """
         Return a visualization identified by its identifier.
         """
-        return self._get(Visualization, f"visualization:{id}")
+        return self._get(self.klasses["visualization"], f"visualization:{id}")
 
     def dashboards(self):
         """
@@ -115,7 +118,7 @@ class Kibana:
         """
         Return a dashboard identified by its identifier.
         """
-        return self._get(Dashboard, f"dashboard:{id}")
+        return self._get(self.klasses["dashboard"], f"dashboard:{id}")
 
     def update_or_create_default_index_pattern(self, index_pattern):
         """
