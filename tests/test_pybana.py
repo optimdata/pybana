@@ -138,8 +138,6 @@ def test_translators():
                 # print(response.to_dict())
                 VegaTranslator().translate(visualization, response, scope)
 
-    # assert 0
-
 
 def test_elastic_translator_helpers():
     assert format_from_interval("1y") == "yyyy"
