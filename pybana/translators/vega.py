@@ -402,6 +402,7 @@ class VegaTranslator:
                 for row in data["values"]:
                     if row.get(state.y(ax)) is None:
                         row[state.y(ax)] = 0
+
         conf["data"] = [data]
         return conf
 
@@ -423,15 +424,34 @@ class VegaTranslator:
             "range": "category",
         }
 
-    def _scales_metric(self, state):
+    def _scales_metric(self, state, conf):
         if state.type() == "pie":
             return
         scheme = []
         domain = []
         for a, agg in enumerate(state.metric_aggs()):
             label = state.series_params(agg)["data"]["label"]
+            ax = state.valueax(state.series_params(agg)["valueAxis"])
+            # Let's hide legend for values that are always equal to 0 when they
+            # are stacked. This hack is usefull when there are many metrics and
+            # only few of them with data.
+            if state.metrics_stacked(ax):
+                label = state.metric_label(agg)
+                if all(
+                    [
+                        row["y"] == 0
+                        for row in conf["data"][0]["values"]
+                        if row["metric"] == label
+                    ]
+                ):
+                    continue
+
             domain.append(label)
-            scheme.append(state.ui_colors.get(label, KIBANA_SEED_COLORS[a]))
+            scheme.append(
+                state.ui_colors.get(
+                    label, KIBANA_SEED_COLORS[a % len(KIBANA_SEED_COLORS)]
+                )
+            )
 
         yield {
             "name": "metriccolor",
@@ -482,7 +502,7 @@ class VegaTranslator:
             self._scale_x(state),
             *self._scales_y(state),
             self._scale_axis(state),
-            *self._scales_metric(state),
+            *self._scales_metric(state, conf),
             self._scale_group(state, conf["data"]),
         ]
 
@@ -534,6 +554,9 @@ class VegaTranslator:
                 {
                     "fill": "groupcolor",
                     "title": "Series",
+                    "columns": 1
+                    if state._state["params"]["legendPosition"] in ("left", "right")
+                    else 10,
                     "orient": state._state["params"]["legendPosition"],
                 }
             ]
@@ -542,6 +565,9 @@ class VegaTranslator:
                 {
                     "fill": "metriccolor",
                     "title": "Series",
+                    "columns": 1
+                    if state._state["params"]["legendPosition"] in ("left", "right")
+                    else 10,
                     "orient": state._state["params"]["legendPosition"],
                 }
             ]
