@@ -509,6 +509,8 @@ class VegaTranslator:
                 "fill": "groupcolor",
                 "title": "Series",
                 "orient": state._state["params"]["legendPosition"],
+                # TODO: offset should be dynamic given the data to prevent label/legend overlapping
+                "offset": 150,
             }
         ]
         return conf
@@ -581,6 +583,10 @@ class VegaTranslator:
                                 "signal": "(datum.startAngle + datum.endAngle)/2"
                             },
                             "fill": {"value": "#000"},
+                            # Hide labels for small angles
+                            "fillOpacity": {
+                                "signal": "datum.endAngle - datum.startAngle < .1 ? 0 : 1"
+                            },
                             "align": {
                                 "signal": "(datum.startAngle + datum.endAngle)/2 < 3.14 ? 'left' : 'right'"
                             },

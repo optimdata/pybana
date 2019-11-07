@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
 
+import ast
 import datetime
 import elasticsearch
 import elasticsearch_dsl
 import json
 import os
+import pytest
 import pytz
 import sys
 
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
-from pybana import Kibana, ElasticTranslator, Context, VegaTranslator, VegaRenderer
+from pybana import Context, ElasticTranslator, Kibana, VegaRenderer, VegaTranslator
 from pybana.translators.elastic.buckets import (
     format_from_interval,
     compute_auto_interval,
@@ -180,3 +182,29 @@ def test_elastic_translator_helpers():
 def test_vega_renderer():
     renderer = VegaRenderer()
     renderer.to_svg({"$schema": "https://vega.github.io/schema/vega/v5.json"})
+
+
+def test_datasweet():
+    import pybana.helpers.datasweet as ds
+
+    assert ds.ds_avg(0, 1) == .5
+    assert ds.ds_count(0, 1) == 2
+    assert ds.ds_cusum(0, 1) == [0, 1]
+    assert ds.ds_derivative(0, 1)[1] == 1
+    assert ds.ds_max(0, 1) == 1
+    assert ds.ds_min(0, 1) == 0
+    assert ds.ds_next(0, 1)[0] == 1
+    assert ds.ds_prev(0, 1)[1] == 0
+    assert ds.ds_sum(0, 1) == 1
+
+    assert ds.is_variable("agg1")
+    assert not ds.is_variable("xagg1")
+
+    assert (
+        ds.datasweet_eval("avg(agg1, agg2) + 1", {"1": {"value": 0}, "2": {"value": 1}})
+        == 1.5
+    )
+
+    with pytest.raises(ValueError):
+        tree = ast.parse("x + 1", mode="eval")
+        tree = ds.DatasweetTransformer().visit(tree)
