@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-
 import json
 
+from pybana.helpers.datasweet import datasweet_eval
 
 __all__ = ("VegaTranslator",)
 
@@ -84,16 +84,24 @@ class CardinalityMetric(BaseMetric):
     aggtype = "cardinality"
 
 
+class DatasweetMetric(BaseMetric):
+    aggtype = "datasweet_formula"
+
+    def contribute(self, agg, bucket, response):
+        return datasweet_eval(agg["params"]["formula"], bucket)
+
+
 METRICS = {
     metric.aggtype: metric
     for metric in [
         AverageMetric,
+        CardinalityMetric,
         CountMetric,
+        DatasweetMetric,
         MaxMetric,
         MedianMetric,
         MinMetric,
         SumMetric,
-        CardinalityMetric,
     ]
 }
 
@@ -316,6 +324,8 @@ class VegaTranslator:
         if it == len(bucket_aggs):
             point["group"] = " - ".join(filter(bool, point.setdefault("groups", [])))
             for m, metric_agg in enumerate(state.metric_aggs()):
+                if metric_agg.get("hidden"):
+                    continue
                 metric = METRICS[metric_agg["type"]]()
                 series_params = state.series_params(metric_agg)
                 ax = state.valueax(series_params["valueAxis"])

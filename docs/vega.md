@@ -19,6 +19,26 @@ response = search.execute()
 vega = VegaTranslator().translate(visualization, response, context)
 ```
 
+## Currently supporting
+
+The vega rendering supports:
+- Visualizations:
+    - line (:warning: split lines is not supported)
+    - histogram (:warning: split lines is not supported)
+    - pie
+- Metrics
+    - Count
+    - Average
+    - Min
+    - Max
+    - Median
+    - Sum
+    - Cardinality
+    - [Datasweet](https://www.datasweet.fr/datasweet-formula)
+
+
+
+
 ## From vega to html
 
 This package also provides a python helper to render a vega spec to html markup using a node subprocess. 

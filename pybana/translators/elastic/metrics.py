@@ -18,35 +18,35 @@ class BaseMetric:
         proxy.metric(agg["id"], agg["type"], **self.params(agg))
 
 
-class AvgBucket(BaseMetric):
+class AvgMetric(BaseMetric):
     aggtype = "avg"
 
     def params(self, agg):
         return {"field": agg["params"]["field"], **super().params(agg)}
 
 
-class CardinalityBucket(BaseMetric):
+class CardinalityMetric(BaseMetric):
     aggtype = "cardinality"
 
     def params(self, agg):
         return {"field": agg["params"]["field"], **super().params(agg)}
 
 
-class CountBucket(BaseMetric):
+class CountMetric(BaseMetric):
     aggtype = "count"
 
     def translate(self, proxy, agg, state):
         pass
 
 
-class MaxBucket(BaseMetric):
+class MaxMetric(BaseMetric):
     aggtype = "max"
 
     def params(self, agg):
         return {"field": agg["params"]["field"], **super().params(agg)}
 
 
-class MedianBucket(BaseMetric):
+class MedianMetric(BaseMetric):
     aggtype = "median"
 
     def params(self, agg):
@@ -60,14 +60,14 @@ class MedianBucket(BaseMetric):
         proxy.metric(agg["id"], "percentiles", **self.params(agg))
 
 
-class MinBucket(BaseMetric):
+class MinMetric(BaseMetric):
     aggtype = "min"
 
     def params(self, agg):
         return {"field": agg["params"]["field"], **super().params(agg)}
 
 
-class PercentilesBucket(BaseMetric):
+class PercentilesMetric(BaseMetric):
     aggtype = "percentiles"
 
     def params(self, agg):
@@ -78,7 +78,7 @@ class PercentilesBucket(BaseMetric):
         }
 
 
-class PercentileRanksBucket(BaseMetric):
+class PercentileRanksMetric(BaseMetric):
     aggtype = "percentile_ranks"
 
     def params(self, agg):
@@ -89,7 +89,7 @@ class PercentileRanksBucket(BaseMetric):
         }
 
 
-class StdDevBucket(BaseMetric):
+class StdDevMetric(BaseMetric):
     aggtype = "std_dev"
 
     def params(self, agg):
@@ -99,26 +99,34 @@ class StdDevBucket(BaseMetric):
         proxy.metric(agg["id"], "extended_stats", **self.params(agg))
 
 
-class SumBucket(BaseMetric):
+class SumMetric(BaseMetric):
     aggtype = "sum"
 
     def params(self, agg):
         return {"field": agg["params"]["field"], **super().params(agg)}
 
 
+class DatasweetMetric(BaseMetric):
+    aggtype = "datasweet_formula"
+
+    def translate(self, proxy, agg, state):
+        pass
+
+
 TRANSLATORS = {
     translator.aggtype: translator
     for translator in (
-        AvgBucket,
-        CardinalityBucket,
-        CountBucket,
-        MaxBucket,
-        MedianBucket,
-        MinBucket,
-        PercentileRanksBucket,
-        PercentilesBucket,
-        StdDevBucket,
-        SumBucket,
+        AvgMetric,
+        CardinalityMetric,
+        CountMetric,
+        DatasweetMetric,
+        MaxMetric,
+        MedianMetric,
+        MinMetric,
+        PercentileRanksMetric,
+        PercentilesMetric,
+        StdDevMetric,
+        SumMetric,
     )
 }
 
