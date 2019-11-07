@@ -386,6 +386,9 @@ class VegaTranslator:
                         "field": state.y(ax),
                         "as": [state.y(ax) + "|0", state.y(ax) + "|1"],
                         "sort": {"field": "metric"},
+                        "offset": "normalize"
+                        if ax["scale"]["mode"] == "percentage"
+                        else "zero",
                     }
                 ]
 
