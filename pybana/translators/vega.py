@@ -99,8 +99,24 @@ METRICS = {
 
 
 class State:
-    def __init__(self, state):
-        self._state = state
+    """
+    Represent the state of the visualization
+
+    :param vis_state dict: Visualization.visState deserialized.
+    :param ui_state dict: Visualization.uiStateJSON deserialized.
+    :param config pybana.Config: Config of the kibana instance.
+    """
+
+    def __init__(self, vis_state, ui_state, config):
+        self._state = vis_state
+        self._ui_state = ui_state
+        self._config = config
+        self.ui_colors = {
+            **json.loads(
+                self._config.config.to_dict().get("visualization:colorMapping", "{}")
+            ),
+            **self._ui_state.get("vis", {}).get("colors", {}),
+        }
 
     def singleton(self):
         return all(map(lambda agg: agg["schema"] != "segment", self._state["aggs"]))
@@ -208,9 +224,6 @@ class State:
     def y(self, ax):
         axid = ax["id"].split("-")[-1]
         return f"y{axid}"
-
-    def ui_colors(self):
-        return self._state.get("vis", {}).get("colors", {})
 
 
 class VegaTranslator:
@@ -405,7 +418,7 @@ class VegaTranslator:
         for a, agg in enumerate(state.metric_aggs()):
             label = state.series_params(agg)["data"]["label"]
             domain.append(label)
-            scheme.append(state.ui_colors().get(label, KIBANA_SEED_COLORS[a]))
+            scheme.append(state.ui_colors.get(label, KIBANA_SEED_COLORS[a]))
 
         yield {
             "name": "metriccolor",
@@ -415,27 +428,25 @@ class VegaTranslator:
         }
 
     def _scale_group(self, state, data):
-        if state.type() == "pie":
-            scheme = []
-            domain = []
-            for a, row in enumerate(data[0]["values"]):
-                label = row["group"]
-                domain.append(label)
-                scheme.append(state.ui_colors().get(label, KIBANA_SEED_COLORS[a]))
+        scheme = []
+        domain = []
+        groups = set()
+        for point in data[0]["values"]:
+            group = point["group"]
+            if group not in groups:
+                domain.append(group)
+                color = state.ui_colors.get(
+                    group, KIBANA_SEED_COLORS[len(groups) % len(KIBANA_SEED_COLORS)]
+                )
+                scheme.append(color)
+                groups.add(group)
 
-            return {
-                "name": "groupcolor",
-                "type": "ordinal",
-                "range": scheme,
-                "domain": domain,
-            }
-        else:
-            return {
-                "name": "groupcolor",
-                "type": "ordinal",
-                "range": "category",
-                "domain": {"data": "table", "field": "group"},
-            }
+        return {
+            "name": "groupcolor",
+            "type": "ordinal",
+            "range": scheme,
+            "domain": domain,
+        }
 
     def _scales_y(self, state):
         for ax in state.valueaxes():
@@ -758,12 +769,11 @@ class VegaTranslator:
         :param context Context: A context is a object with beg (datetime), end (datetime) and tzinfo (pytz.timezone).
         """
         state = State(
-            {
-                **json.loads(visualization.visualization["visState"]),
-                **json.loads(
-                    visualization.visualization.to_dict().get("uiStateJSON", "{}")
-                ),
-            }
+            vis_state=json.loads(visualization.visualization["visState"]),
+            ui_state=json.loads(
+                visualization.visualization.to_dict().get("uiStateJSON", "{}")
+            ),
+            config=context.config,
         )
 
         ret = self.conf(state)

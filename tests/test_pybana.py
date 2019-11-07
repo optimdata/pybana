@@ -109,11 +109,13 @@ def test_translators():
     load_fixtures(elastic, PYBANA_INDEX)
     load_data(elastic, "pybana")
     kibana = Kibana(PYBANA_INDEX)
+    kibana.init_config()
     translator = ElasticTranslator()
     context = Context(
         datetime.datetime(2019, 1, 1, tzinfo=pytz.utc),
         datetime.datetime(2019, 1, 3, tzinfo=pytz.utc),
         pytz.utc,
+        kibana.config(),
     )
     for visualization in kibana.visualizations().scan():
         if visualization.state()["type"] in ("histogram", "metric", "pie", "line"):
