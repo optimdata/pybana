@@ -2,6 +2,8 @@
 
 import json
 
+from .metrics import MetricTranslator
+
 """
 Provide translators which translate bucket aggregations defined using kibana syntax to elasticsearch syntax.
 
@@ -170,8 +172,12 @@ TRANSLATORS = {
 
 class BucketTranslator:
     def translate(self, proxy, agg, state, context):
-        return proxy.bucket(
+        ret = proxy.bucket(
             agg["id"],
             agg["type"],
             **TRANSLATORS[agg["type"]]().translate(agg, state, context),
         )
+        for metric_agg in state["aggs"]:
+            if metric_agg["id"] == agg["params"].get("orderBy"):
+                MetricTranslator().translate(ret, metric_agg, state)
+        return ret

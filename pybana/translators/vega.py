@@ -118,6 +118,14 @@ class State:
             if param["data"]["id"] == agg["id"]
         ][0]
 
+    def bucket_aggs(self):
+        """
+        Return all the aggregations that generate bucketing.
+        """
+        return [
+            agg for agg in self._state["aggs"] if agg["schema"] in ("segment", "group")
+        ]
+
     def segment_aggs(self):
         return self._aggs_by_type("segment")
 
@@ -273,6 +281,65 @@ class VegaTranslator:
             rec(0)
         return conf
 
+    def _iter_response(self, node, bucket_aggs, it, point, state, response):
+        """
+        Iterate through response and yield each point.
+
+        A point is the value of a metric at a given bucketing. It has the following
+        properties:
+        - x: It's the value of the segment agg (there's should be only one)
+        - group: A string which concatenate all the group keys
+        - y: The value of the metric
+        - metric: The name of the metric
+        - axis: The axis on which the point should be displayed
+
+        :param node dict: The node of the response. Should start at `response.aggregations`.
+        :param bucket_aggs list: List of bucket aggs
+        :param it: Iterator on bucket_aggs.
+        :param point: The point currently being filled.
+        :param state: Visualization state.
+        :param response: Elasticsearch response.
+        """
+        if it == len(bucket_aggs):
+            point["group"] = " - ".join(filter(bool, point.setdefault("groups", [])))
+            for m, metric_agg in enumerate(state.metric_aggs()):
+                metric = METRICS[metric_agg["type"]]()
+                series_params = state.series_params(metric_agg)
+                ax = state.valueax(series_params["valueAxis"])
+                y = metric.contribute(metric_agg, node, response)
+                childpoint = point.copy()
+                # handling case where no bucket aggs
+                childpoint.setdefault("x", "all")
+                childpoint.pop("groups")
+                childpoint.update(
+                    {
+                        "y": y,
+                        state.y(ax): y,
+                        "m": m,
+                        "metric": state.metric_label(metric_agg),
+                        "axis": series_params["valueAxis"],
+                    }
+                )
+                tooltip = {"x": childpoint["x"], childpoint["metric"]: y}
+                if childpoint["group"]:
+                    tooltip["group"] = childpoint["group"]
+                childpoint["tooltip"] = tooltip
+                yield childpoint
+            return
+        agg = bucket_aggs[it]
+        aggnode = node[agg["id"]]
+        for child in aggnode["buckets"]:
+            childpoint = point.copy()
+            key = child.get("key_as_string") or child.get("key")
+            if agg["schema"] == "segment":
+                childpoint["x"] = key
+            else:
+                childpoint.setdefault("groups", []).append(key)
+            for obj in self._iter_response(
+                child, bucket_aggs, it + 1, childpoint, state, response
+            ):
+                yield obj
+
     def data_line_bar(self, conf, state, response):
         data = {"name": "table", "values": []}
         for ax in state.valueaxes():
@@ -299,53 +366,10 @@ class VegaTranslator:
                     }
                 ]
 
-        def iterate_segment():
-            if state.singleton():
-                yield "all", response.aggregations.to_dict()
-            else:
-                # For now only first segment is handled
-                agg = state.segment_aggs()[0]
-                buckets = response.aggregations.to_dict()[agg["id"]]["buckets"]
-                for bucket in buckets:
-                    x = bucket.get("key_as_string") or bucket.get("key")
-                    yield x, bucket
-
-        def rec(bucket, it, groups, baseitem):
-            if it == len(group_aggs):
-                groups = groups + [bucket.get("key_as_string") or bucket.get("key")]
-                group = " - ".join(filter(bool, groups[1:]))
-                y = metric.contribute(agg, bucket, response)
-                tooltip = {"x": baseitem["x"], baseitem["metric"]: y}
-                if group:
-                    tooltip["group"] = group
-                yield (
-                    {
-                        "y": y,
-                        state.y(ax): y,
-                        "group": group,
-                        "axis": series_params["valueAxis"],
-                        "tooltip": tooltip,
-                        **baseitem,
-                    }
-                )
-
-            if it < len(group_aggs):
-                groups = groups + [bucket.get("key_as_string") or bucket.get("key")]
-                buckets = bucket[group_aggs[it]["id"]]["buckets"]
-                for bucket in buckets:
-                    for item in rec(bucket, it + 1, groups, baseitem):
-                        yield item
-
-        for x, bucket in iterate_segment():
-            for m, agg in enumerate(state.metric_aggs()):
-                metric = METRICS[agg["type"]]()
-                label = state.metric_label(agg)
-                series_params = state.series_params(agg)
-                group_aggs = state.group_aggs()
-                ax = state.valueax(series_params["valueAxis"])
-                baseitem = {"x": x, "metric": label, "m": m}
-                for item in rec(bucket, 0, [], baseitem):
-                    data["values"].append(item)
+        for item in self._iter_response(
+            response.aggregations.to_dict(), state.bucket_aggs(), 0, {}, state, response
+        ):
+            data["values"].append(item)
 
         for ax in state.valueaxes():
             if state.stacked_applied(ax):

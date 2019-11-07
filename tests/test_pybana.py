@@ -89,7 +89,7 @@ def test_client():
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())
-    assert len(visualizations) == 20
+    assert len(visualizations) == 21
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.state()
     assert visualization.index().meta.id == index_pattern.meta.id
@@ -130,6 +130,7 @@ def test_translators():
                 "ad4b9310-ffdc-11e9-b6bd-4d907ad3c29d",
                 "e19d9640-ffdc-11e9-b6bd-4d907ad3c29d",
                 "2fb77bc0-ffdd-11e9-b6bd-4d907ad3c29d",
+                "9a4d3520-013f-11ea-b1ec-3910cd795dc1",
             ):
                 response = search.execute()
                 # print(visualization)
