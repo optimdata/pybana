@@ -5,9 +5,9 @@ import json
 
 from pybana.translators.elastic.buckets import BucketTranslator
 from pybana.translators.elastic.metrics import MetricTranslator
+from .filter import FilterTranslator
 
-
-__all__ = ("ElasticTranslator", "Context")
+__all__ = ("ElasticTranslator", "Context", "FilterTranslator")
 
 
 class Context:
@@ -55,4 +55,5 @@ class ElasticTranslator:
         for agg in metric_aggs:
             MetricTranslator().translate(proxy, agg, state)
         search = search[:0]
+        search = search.filter(visualization.filters())
         return search

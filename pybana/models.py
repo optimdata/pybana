@@ -65,6 +65,17 @@ class Visualization(BaseDocument):
         key = json.loads(search_source).get("index")
         return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index)
 
+    def filters(self):
+        """
+        Returns the search filters
+        :return elasticsearch_dsl.Q
+        """
+        from pybana import FilterTranslator
+
+        search_source = self.visualization.kibanaSavedObjectMeta.searchSourceJSON
+        filters = json.loads(search_source).get("filter", [])
+        return FilterTranslator().translate(filters)
+
 
 class Dashboard(BaseDocument):
     _type = "dashboard"
