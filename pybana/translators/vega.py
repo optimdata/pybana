@@ -523,7 +523,11 @@ class VegaTranslator:
                 )
             for ax in state.valueaxes():
                 if ax["show"]:
-                    axconf = {"orient": ax["position"], "scale": ax["id"]}
+                    axconf = {
+                        "orient": ax["position"],
+                        "scale": ax["id"],
+                        "title": ax["title"]["text"],
+                    }
                     if ax["scale"]["mode"] == "percentage":
                         axconf["format"] = ".0%"
                     conf["axes"].append(axconf)
