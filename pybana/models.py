@@ -13,6 +13,11 @@ class BaseDocument(Document):
     class Meta:
         doc_type = "doc"
 
+    class Index:
+        # We use elasticsearch_dsl 6.3 behaviour here as we don't know in advance
+        # the name of the kibana index
+        name = "*"
+
     def __init__(self, **kwargs):
         super().__init__(type=self._type, **kwargs)
 
