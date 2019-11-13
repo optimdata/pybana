@@ -41,24 +41,27 @@ class Kibana:
         """
         self._index = index
 
-    def _search(self, type):
+    def _search(self, type, using):
         klass = self.klasses.get(type)
         search = klass.search if klass else elasticsearch_dsl.Search
-        return search(index=self._index)
+        return search(index=self._index, using=using)
 
-    def _get(self, klass, id):
-        ret = klass.get(index=self._index, id=id)
+    def _get(self, klass, id, using):
+        ret = klass.get(index=self._index, id=id, using=using)
         return ret
 
-    def objects(self, type):
-        return self._search(type).filter("term", type=type)
+    def objects(self, type, using=None):
+        return self._search(type, using=using).filter("term", type=type)
 
-    def config_id(self):
-        elastic = elasticsearch_dsl.connections.get_connection()
+    def config_id(self, using=None):
+        elastic = elasticsearch_dsl.connections.get_connection(using or "default")
         return "config:%s" % elastic.info()["version"]["number"]
 
-    def config(self):
-        return self._get(Config, self.config_id())
+    def config(self, using=None):
+        """
+        Return the config associated to the current version of elastic
+        """
+        return self._get(Config, self.config_id(using), using=using)
 
     def init_index(self):
         """
@@ -76,73 +79,77 @@ class Kibana:
                 break
             suffix += 1
 
-    def init_config(self):
+    def init_config(self, using=None):
         """
         Create the config document that each kibana requires. This
         document stores all the settings such as timepicker defaults,
         date formats etc
         """
         try:
-            self.config()
+            self.config(using=using)
         except NotFoundError:
             Config(config=DEFAULT_CONFIG, meta={"id": self.config_id()}).save(
-                index=self._index, refresh="wait_for"
+                index=self._index, refresh="wait_for", using=using
             )
 
-    def index_patterns(self):
+    def index_patterns(self, using=None):
         """
         Return a Search to all the index-patterns.
         """
-        return self.objects("index-pattern")
+        return self.objects("index-pattern", using=using)
 
-    def index_pattern(self, id):
+    def index_pattern(self, id, using=None):
         """
         Return a index-pattern identified by its identifier.
         """
-        return self._get(self.klasses["index-pattern"], f"index-pattern:{id}")
+        return self._get(
+            self.klasses["index-pattern"], f"index-pattern:{id}", using=using
+        )
 
-    def searches(self):
+    def searches(self, using=None):
         """
         Return a Search to all the index-patterns.
         """
-        return self.objects("search")
+        return self.objects("search", using=using)
 
-    def search(self, id):
+    def search(self, id, using=None):
         """
         Return a index-pattern identified by its identifier.
         """
-        return self._get(self.klasses["search"], f"search:{id}")
+        return self._get(self.klasses["search"], f"search:{id}", using=using)
 
-    def visualizations(self):
+    def visualizations(self, using=None):
         """
         Return a Search to all the visualizations.
         """
-        return self.objects("visualization")
+        return self.objects("visualization", using=using)
 
-    def visualization(self, id):
+    def visualization(self, id, using=None):
         """
         Return a visualization identified by its identifier.
         """
-        return self._get(self.klasses["visualization"], f"visualization:{id}")
+        return self._get(
+            self.klasses["visualization"], f"visualization:{id}", using=using
+        )
 
-    def dashboards(self):
+    def dashboards(self, using=None):
         """
         Return a Search to all the dashboards.
         """
-        return self.objects("dashboard")
+        return self.objects("dashboard", using=using)
 
-    def dashboard(self, id):
+    def dashboard(self, id, using=None):
         """
         Return a dashboard identified by its identifier.
         """
-        return self._get(self.klasses["dashboard"], f"dashboard:{id}")
+        return self._get(self.klasses["dashboard"], f"dashboard:{id}", using=using)
 
-    def update_or_create_default_index_pattern(self, index_pattern):
+    def update_or_create_default_index_pattern(self, index_pattern, using=None):
         """
         If config document does not have index pattern, associate the
         first index pattern found.
         """
-        config = self.config()
+        config = self.config(using)
         if not config.config.to_dict().get("defaultIndex"):
             config.config.defaultIndex = index_pattern.meta.id.split(":")[-1]
             config.save(refresh="wait_for")
