@@ -24,13 +24,12 @@ elastic = elasticsearch.Elasticsearch()
 elasticsearch_dsl.connections.add_connection("default", elastic)
 
 
-def load_fixtures(elastic, index):
-    if elastic.indices.exists(index):
-        elastic.indices.delete(index)
+def load_fixtures(elastic, kibana, index):
+    for realindex in elastic.indices.get(index, ignore_unavailable=True):
+        elastic.indices.delete(realindex)
     datafn = os.path.join(BASE_DIRECTORY, "pybana/index.json")
-    mappingsfn = os.path.join(BASE_DIRECTORY, "pybana/mappings.json")
-    with open(mappingsfn) as fd:
-        elastic.indices.create(index, body=json.load(fd))
+
+    kibana.init_index()
 
     def actions():
         with open(datafn, "r") as fd:
@@ -81,8 +80,10 @@ def load_data(elastic, index):
 
 
 def test_client():
-    load_fixtures(elastic, PYBANA_INDEX)
     kibana = Kibana(PYBANA_INDEX)
+    elastic.indices.delete(f"{PYBANA_INDEX}*")
+    elastic.indices.create(f"{PYBANA_INDEX}_1")
+    load_fixtures(elastic, kibana, PYBANA_INDEX)
     kibana.init_config()
     kibana.init_config()
     assert kibana.config()
@@ -108,9 +109,9 @@ def test_client():
 
 
 def test_translators():
-    load_fixtures(elastic, PYBANA_INDEX)
-    load_data(elastic, "pybana")
     kibana = Kibana(PYBANA_INDEX)
+    load_fixtures(elastic, kibana, PYBANA_INDEX)
+    load_data(elastic, "pybana")
     kibana.init_config()
     translator = ElasticTranslator()
     context = Context(

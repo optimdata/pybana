@@ -12,7 +12,7 @@ The ORM was implemented to ease the automatic creation/update of kibana objects.
 
 A kibana server instance performs several checks when it starts:
 
-1. Create if it does not exists a `.kibana` index on elasticsearch. `pybana` does not mimic this behaviour.
+1. Create if it does not exists a `.kibana` index on elasticsearch. `pybana` does mimic this behaviour.
 2. Create a `Config` document.
     - This document has the following id: `config:${ELASTICSEARCH_VERSION}` (example: `config:6.7.1`)
     - It contains a `config` field which stores:

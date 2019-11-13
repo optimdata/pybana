@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import json
+import os
 
 from elasticsearch import NotFoundError
 import elasticsearch_dsl
@@ -58,6 +59,22 @@ class Kibana:
 
     def config(self):
         return self._get(Config, self.config_id())
+
+    def init_index(self):
+        """
+        Create the elasticsearch index as kibana would do.
+        """
+        elastic = elasticsearch_dsl.connections.get_connection("default")
+        mappingsfn = os.path.join(os.path.dirname(__file__), "mappings.json")
+        suffix = 1
+        while True:
+            index = f"{self._index}_{suffix}"
+            if not elastic.indices.exists(index):
+                with open(mappingsfn) as fd:
+                    elastic.indices.create(index, body=json.load(fd))
+                    elastic.indices.put_alias(index=index, name=self._index)
+                break
+            suffix += 1
 
     def init_config(self):
         """
