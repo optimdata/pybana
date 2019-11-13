@@ -88,7 +88,7 @@ class Dashboard(BaseDocument):
     def panels(self):
         return json.loads(self.dashboard.panelsJSON)
 
-    def visualizations(self, missing="skip"):
+    def visualizations(self, missing="skip", using=None):
         """
         Does the join automatically by parsing panelsJSON.
 
@@ -101,6 +101,7 @@ class Dashboard(BaseDocument):
                 docs=["visualization:" + panel["id"] for panel in panels],
                 index=self.meta.index,
                 missing="skip",
+                using=using,
             )
             if panels
             else []

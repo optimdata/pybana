@@ -70,7 +70,7 @@ class Kibana:
         elastic = elasticsearch_dsl.connections.get_connection("default")
         mappingsfn = os.path.join(os.path.dirname(__file__), "mappings.json")
         suffix = 1
-        while True:
+        while not elastic.indices.exists(self._index):
             index = f"{self._index}_{suffix}"
             if not elastic.indices.exists(index):
                 with open(mappingsfn) as fd:
