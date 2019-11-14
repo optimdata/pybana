@@ -100,7 +100,7 @@ class Dashboard(BaseDocument):
             Visualization.mget(
                 docs=["visualization:" + panel["id"] for panel in panels],
                 index=self.meta.index,
-                missing="skip",
+                missing=missing,
                 using=using,
             )
             if panels
