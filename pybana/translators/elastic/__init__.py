@@ -46,7 +46,7 @@ class ElasticTranslator:
         segment_aggs = [
             agg
             for agg in state["aggs"]
-            if agg["schema"] in ("segment", "group", "split")
+            if agg["schema"] in ("segment", "group", "split", "bucket")
         ]
         metric_aggs = [agg for agg in state["aggs"] if agg["schema"] in ("metric",)]
         proxy = search.aggs

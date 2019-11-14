@@ -4,7 +4,7 @@ import json
 
 from pybana.helpers.datasweet import datasweet_eval
 
-__all__ = ("VegaTranslator",)
+__all__ = ("VegaTranslator", "ContextVisualization")
 
 CATEGORY20 = [
     "#1f77b4",
@@ -106,18 +106,20 @@ METRICS = {
 }
 
 
-class State:
+class ContextVisualization:
     """
-    Represent the state of the visualization
+    Represent a visualization with a context.
 
     :param vis_state dict: Visualization.visState deserialized.
     :param ui_state dict: Visualization.uiStateJSON deserialized.
     :param config pybana.Config: Config of the kibana instance.
     """
 
-    def __init__(self, vis_state, ui_state, config):
-        self._state = vis_state
-        self._ui_state = ui_state
+    def __init__(self, visualization, config):
+        self._state = json.loads(visualization.visualization["visState"])
+        self._ui_state = json.loads(
+            visualization.visualization.to_dict().get("uiStateJSON", "{}")
+        )
         self._config = config
         self.ui_colors = {
             **json.loads(
@@ -147,7 +149,7 @@ class State:
         Return all the aggregations that generate bucketing.
         """
         return [
-            agg for agg in self._state["aggs"] if agg["schema"] in ("segment", "group")
+            agg for agg in self._state["aggs"] if agg["schema"] in ("segment", "group", "bucket")
         ]
 
     def segment_aggs(self):
@@ -157,7 +159,9 @@ class State:
         return self._aggs_by_type("metric")
 
     def metric_label(self, agg):
-        if self.type() == "pie":
+        if agg["params"].get("customLabel"):
+            return agg["params"]["customLabel"]
+        if self.type() in ("pie",):
             if agg["type"] == "count":
                 return "Count"
             elif agg["type"] == "sum":
@@ -167,6 +171,10 @@ class State:
             raise NotImplementedError(
                 "%(type)s for pie chart is not implemented" % agg
             )  # pragma: no cover
+        elif self.type() in ("table",):
+            if agg["type"] == "count":
+                return "Count"
+            return "%s - %s" % (agg["type"], agg["params"]["field"])
         return self.series_params(agg)["data"]["label"]
 
     def group_aggs(self):
@@ -327,22 +335,20 @@ class VegaTranslator:
                 if metric_agg.get("hidden"):
                     continue
                 metric = METRICS[metric_agg["type"]]()
-                series_params = state.series_params(metric_agg)
-                ax = state.valueax(series_params["valueAxis"])
                 y = metric.contribute(metric_agg, node, response)
                 childpoint = point.copy()
                 # handling case where no bucket aggs
                 childpoint.setdefault("x", "all")
                 childpoint.pop("groups")
                 childpoint.update(
-                    {
-                        "y": y,
-                        state.y(ax): y,
-                        "m": m,
-                        "metric": state.metric_label(metric_agg),
-                        "axis": series_params["valueAxis"],
-                    }
+                    {"y": y, "m": m, "metric": state.metric_label(metric_agg)}
                 )
+                if "seriesParams" in state._state["params"]:
+                    series_params = state.series_params(metric_agg)
+                    ax = state.valueax(series_params["valueAxis"])
+                    childpoint.update(
+                        {state.y(ax): y, "axis": series_params["valueAxis"]}
+                    )
                 tooltip = {"x": childpoint["x"], childpoint["metric"]: y}
                 if childpoint["group"]:
                     tooltip["group"] = childpoint["group"]
@@ -817,13 +823,7 @@ class VegaTranslator:
         :param elasticsearch_dsl.response.Response visualization: Visualization fetched from a kibana index.
         :param context Context: A context is a object with beg (datetime), end (datetime) and tzinfo (pytz.timezone).
         """
-        state = State(
-            vis_state=json.loads(visualization.visualization["visState"]),
-            ui_state=json.loads(
-                visualization.visualization.to_dict().get("uiStateJSON", "{}")
-            ),
-            config=context.config,
-        )
+        state = ContextVisualization(visualization=visualization, config=context.config)
 
         ret = self.conf(state)
         ret = self.data(ret, state, response)
