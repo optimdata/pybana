@@ -89,6 +89,8 @@ def test_client():
     assert kibana.config()
     assert len(list(kibana.index_patterns())) == 1
     index_pattern = kibana.index_pattern("6c172f80-fb13-11e9-84e4-078763638bf3")
+    index_pattern.fields()
+    index_pattern.field_format_map()
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())

@@ -149,7 +149,9 @@ class ContextVisualization:
         Return all the aggregations that generate bucketing.
         """
         return [
-            agg for agg in self._state["aggs"] if agg["schema"] in ("segment", "group", "bucket")
+            agg
+            for agg in self._state["aggs"]
+            if agg["schema"] in ("segment", "group", "bucket")
         ]
 
     def segment_aggs(self):

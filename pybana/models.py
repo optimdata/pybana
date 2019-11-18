@@ -29,6 +29,20 @@ class Config(BaseDocument):
 class IndexPattern(BaseDocument):
     _type = "index-pattern"
 
+    def fields(self):
+        """
+        Returns a dict of fields {name: field}.
+        """
+        return {
+            field["name"]: field for field in json.loads(self["index-pattern"].fields)
+        }
+
+    def field_format_map(self):
+        """
+        Returns the fielFormatMap deserialized.
+        """
+        return json.loads(self.to_dict()["index-pattern"].get("fieldFormatMap", "{}"))
+
 
 class Search(BaseDocument):
     _type = "search"
