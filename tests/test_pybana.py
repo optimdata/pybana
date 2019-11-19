@@ -141,6 +141,7 @@ def test_translators():
                 "e19d9640-ffdc-11e9-b6bd-4d907ad3c29d",
                 "2fb77bc0-ffdd-11e9-b6bd-4d907ad3c29d",
                 "9a4d3520-013f-11ea-b1ec-3910cd795dc1",
+                "53b3da70-fbbc-11e9-84e4-078763638bf3",
             ):
                 response = search.execute()
                 VegaTranslator().translate(visualization, response, scope)

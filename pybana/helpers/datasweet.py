@@ -96,12 +96,17 @@ class DatasweetTransformer(ast.NodeTransformer):
 def datasweet_eval(expr, bucket):
     tree = ast.parse(expr, mode="eval")
     tree = DatasweetTransformer().visit(tree)
-    return eval(
-        compile(tree, "a", mode="eval"),
-        FUNCS,
-        {
-            f"agg{key}": float("nan") if value["value"] is None else value["value"]
-            for key, value in bucket.items()
-            if key.isdigit()
-        },
-    )
+    scope = {}
+    for key, value in bucket.items():
+        # TODO. Ugly. fix this.
+        # count agg are not supported here
+        if key.isdigit():
+            val = (
+                value["std_deviation"]
+                if "std_deviation" in value
+                else value["values"]["50.0"]
+                if "values" in value
+                else value["value"]
+            )
+            scope[f"agg{key}"] = float("nan") if val is None else val
+    return eval(compile(tree, "a", mode="eval"), FUNCS, scope)

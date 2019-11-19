@@ -28,6 +28,16 @@ class AverageMetric(BaseMetric):
 class MedianMetric(BaseMetric):
     aggtype = "median"
 
+    def contribute(self, agg, bucket, response):
+        return (bucket or response["aggregations"])[agg["id"]]["values"]["50.0"]
+
+
+class StdDevMetric(BaseMetric):
+    aggtype = "std_dev"
+
+    def contribute(self, agg, bucket, response):
+        return (bucket or response["aggregations"])[agg["id"]]["std_deviation"]
+
 
 class MinMetric(BaseMetric):
     aggtype = "min"
@@ -62,6 +72,7 @@ VEGA_METRICS = {
         MaxMetric,
         MedianMetric,
         MinMetric,
+        StdDevMetric,
         SumMetric,
     ]
 }
