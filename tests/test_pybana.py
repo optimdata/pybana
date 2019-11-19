@@ -89,18 +89,21 @@ def test_client():
     assert kibana.config()
     assert len(list(kibana.index_patterns())) == 1
     index_pattern = kibana.index_pattern("6c172f80-fb13-11e9-84e4-078763638bf3")
-    index_pattern.fields()
-    index_pattern.field_format_map()
+    index_pattern.fields
+    index_pattern.fieldFormatMap
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())
     assert len(visualizations) == 21
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
-    visualization.state()
+    visualization.visState
+    visualization.uiStateJSON
     assert visualization.index().meta.id == index_pattern.meta.id
     dashboards = list(kibana.dashboards())
     assert len(dashboards) == 1
     dashboard = kibana.dashboard("f57a7160-fb18-11e9-84e4-078763638bf3")
+    dashboard.panelsJSON
+    dashboard.optionsJSON
     assert len(dashboard.visualizations()) == 2
     visualization = kibana.visualization("f4a09a00-fe77-11e9-8c18-250a1adff826")
     search = visualization.related_search()
@@ -123,7 +126,7 @@ def test_translators():
         kibana.config(),
     )
     for visualization in kibana.visualizations().scan():
-        if visualization.state()["type"] in ("histogram", "metric", "pie", "line"):
+        if visualization.visState["type"] in ("histogram", "metric", "pie", "line"):
             search = translator.translate(visualization, scope)
             if visualization.meta.id.split(":")[-1] in (
                 "695c02f0-fb1a-11e9-84e4-078763638bf3",

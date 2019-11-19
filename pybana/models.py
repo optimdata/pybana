@@ -10,6 +10,9 @@ __all__ = ("BaseDocument", "Config", "IndexPattern", "Visualization", "Dashboard
 class BaseDocument(Document):
     type = Keyword()
 
+    # List of json attributes.
+    json_attrs = []
+
     class Meta:
         doc_type = "doc"
 
@@ -20,6 +23,16 @@ class BaseDocument(Document):
 
     def __init__(self, **kwargs):
         super().__init__(type=self._type, **kwargs)
+        self._json_attrs_cache = {}
+
+    def __getattr__(self, key):
+        if key in self.json_attrs:
+            if key not in self._json_attrs_cache:
+                self._json_attrs_cache[key] = json.loads(
+                    self.to_dict()[self._type].get(key, "null")
+                )
+            return self._json_attrs_cache[key]
+        return super().__getattr__(key)
 
 
 class Config(BaseDocument):
@@ -28,20 +41,7 @@ class Config(BaseDocument):
 
 class IndexPattern(BaseDocument):
     _type = "index-pattern"
-
-    def fields(self):
-        """
-        Returns a dict of fields {name: field}.
-        """
-        return {
-            field["name"]: field for field in json.loads(self["index-pattern"].fields)
-        }
-
-    def field_format_map(self):
-        """
-        Returns the fielFormatMap deserialized.
-        """
-        return json.loads(self.to_dict()["index-pattern"].get("fieldFormatMap", "{}"))
+    json_attrs = ["fields", "fieldFormatMap"]
 
 
 class Search(BaseDocument):
@@ -59,9 +59,7 @@ class Search(BaseDocument):
 
 class Visualization(BaseDocument):
     _type = "visualization"
-
-    def state(self):
-        return json.loads(self.visualization.visState)
+    json_attrs = ["visState", "uiStateJSON"]
 
     def related_search(self):
         """
@@ -98,9 +96,7 @@ class Visualization(BaseDocument):
 
 class Dashboard(BaseDocument):
     _type = "dashboard"
-
-    def panels(self):
-        return json.loads(self.dashboard.panelsJSON)
+    json_attrs = ["panelsJSON", "optionsJSON"]
 
     def visualizations(self, missing="skip", using=None):
         """
@@ -109,7 +105,7 @@ class Dashboard(BaseDocument):
         :param missing: Check https://elasticsearch-dsl.readthedocs.io/en/latest/api.html#elasticsearch_dsl.Document.mget
         :type string
         """
-        panels = self.panels()
+        panels = self.panelsJSON
         return (
             Visualization.mget(
                 docs=["visualization:" + panel["id"] for panel in panels],

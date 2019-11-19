@@ -88,4 +88,25 @@ index_pattern = visualization.index()
 # Get the index pattern associated to a search
 index_pattern = search.index()
 
+# Some objects fields are serialized in json like Dashboard.panelsJSON.
+# Some of those fields can be directly accessed like the example below.
+# The deserialization is cached in order to keep good performances
+
+dashboard.panelsJSON
+# [{'gridData': {'x': 0, 'y': 0, 'w': 24, 'h': 15, 'i': '1'},...
+
+dashboard.panelsJSON
+# {'darkTheme': False, 'useMargins': True, 'hidePanelTitles': ...}
+
+visualizations.visState
+# {'title': 'My viz', 'type': ...}
+
+visualization.uiStateJSON
+# {}
+
+index_pattern.fields
+# [{'name': '_id', 'type': 'string', 'count': 0, 'scripted': Fa...}...]
+
+index_pattern.fieldFormatMap
+# {'foo': {'id': 'number', 'params': {'pattern': '0.0'}}}
 ```

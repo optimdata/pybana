@@ -15,10 +15,8 @@ class ContextVisualization:
     """
 
     def __init__(self, visualization, config):
-        self._state = json.loads(visualization.visualization["visState"])
-        self._ui_state = json.loads(
-            visualization.visualization.to_dict().get("uiStateJSON", "{}")
-        )
+        self._state = visualization.visState.to_dict()
+        self._ui_state = visualization.uiStateJSON.to_dict()
         self._config = config
         self.ui_colors = {
             **json.loads(
