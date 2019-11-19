@@ -13,7 +13,7 @@ import sys
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
-from pybana import Context, ElasticTranslator, Kibana, VegaRenderer, VegaTranslator
+from pybana import Scope, ElasticTranslator, Kibana, VegaRenderer, VegaTranslator
 from pybana.translators.elastic.buckets import (
     format_from_interval,
     compute_auto_interval,
@@ -116,7 +116,7 @@ def test_translators():
     load_data(elastic, "pybana")
     kibana.init_config()
     translator = ElasticTranslator()
-    context = Context(
+    scope = Scope(
         datetime.datetime(2019, 1, 1, tzinfo=pytz.utc),
         datetime.datetime(2019, 1, 3, tzinfo=pytz.utc),
         pytz.utc,
@@ -124,7 +124,7 @@ def test_translators():
     )
     for visualization in kibana.visualizations().scan():
         if visualization.state()["type"] in ("histogram", "metric", "pie", "line"):
-            search = translator.translate(visualization, context)
+            search = translator.translate(visualization, scope)
             if visualization.meta.id.split(":")[-1] in (
                 "695c02f0-fb1a-11e9-84e4-078763638bf3",
                 "1c7226e0-ffd9-11e9-b6bd-4d907ad3c29d",
@@ -144,7 +144,7 @@ def test_translators():
                 # print(visualization.index())
                 # print(search.to_dict())
                 # print(response.to_dict())
-                VegaTranslator().translate(visualization, response, context)
+                VegaTranslator().translate(visualization, response, scope)
 
 
 def test_elastic_translator_helpers():
