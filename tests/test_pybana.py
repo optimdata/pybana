@@ -94,7 +94,7 @@ def test_client():
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())
-    assert len(visualizations) == 21
+    assert len(visualizations) == 22
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.visState
     visualization.uiStateJSON
@@ -143,10 +143,6 @@ def test_translators():
                 "9a4d3520-013f-11ea-b1ec-3910cd795dc1",
             ):
                 response = search.execute()
-                # print(visualization)
-                # print(visualization.index())
-                # print(search.to_dict())
-                # print(response.to_dict())
                 VegaTranslator().translate(visualization, response, scope)
 
 
