@@ -1,5 +1,9 @@
 ## History
 
+### 0.3.1
+
+- Handle ZeroDivisionError in datasweet
+
 ### 0.3.0
 
 - Rename `Context` to `Scope`
