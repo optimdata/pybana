@@ -109,4 +109,7 @@ def datasweet_eval(expr, bucket):
                 else value["value"]
             )
             scope[f"agg{key}"] = float("nan") if val is None else val
-    return eval(compile(tree, "a", mode="eval"), FUNCS, scope)
+    try:
+        return eval(compile(tree, "a", mode="eval"), FUNCS, scope)
+    except ZeroDivisionError:
+        return None

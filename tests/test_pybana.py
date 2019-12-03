@@ -208,6 +208,8 @@ def test_datasweet():
         == 1.5
     )
 
+    assert ds.datasweet_eval("1 / 0", {}) is None
+
     with pytest.raises(ValueError):
         tree = ast.parse("x + 1", mode="eval")
         tree = ds.DatasweetTransformer().visit(tree)
