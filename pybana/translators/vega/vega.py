@@ -286,14 +286,23 @@ class VegaTranslator:
             # TODO: handle more that 1 axe
             conf["axes"] = []
             categoryax = state._state["params"]["categoryAxes"][0]
+
             if categoryax["show"]:
-                conf["axes"].append(
-                    {
-                        "orient": categoryax["position"],
-                        "scale": "xscale",
-                        "labelOverlap": True,
-                    }
-                )
+                ax = {
+                    "orient": categoryax["position"],
+                    "scale": "xscale",
+                    "labelOverlap": True,
+                }
+                if categoryax["labels"].get("rotate", 0) != 0:
+                    ax.update(
+                        {
+                            "labelAngle": 360 - categoryax["labels"]["rotate"],
+                            "labelBaseline": "middle",
+                            "labelAlign": "right",
+                            "labelLimit": 1000,
+                        }
+                    )
+                conf["axes"].append(ax)
             for ax in state.valueaxes():
                 if ax["show"]:
                     axconf = {
