@@ -1,5 +1,9 @@
 ## History
 
+### 0.4.0
+
+- Handle Category axe rotation
+
 ### 0.3.1
 
 - Handle ZeroDivisionError in datasweet
