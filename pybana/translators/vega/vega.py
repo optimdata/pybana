@@ -97,7 +97,9 @@ class VegaTranslator:
         :param response: Elasticsearch response.
         """
         if it == len(bucket_aggs):
-            point["group"] = " - ".join(filter(bool, point.setdefault("groups", [])))
+            point["group"] = " - ".join(
+                map(str, filter(bool, point.setdefault("groups", [])))
+            )
             for m, metric_agg in enumerate(state.metric_aggs()):
                 if metric_agg.get("hidden"):
                     continue
