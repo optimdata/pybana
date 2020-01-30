@@ -15,7 +15,7 @@ process.stdin.on('readable', () => {
 
 process.stdin.on('end', () => {
   data = JSON.parse(_.trim(data));
-  var view = new vega.View(vega.parse(data), { renderer: 'none' });
+  var view = new vega.View(vega.parse(data), { renderer: 'none' }).finalize();
   view.toSVG().then(function(svg) {
     process.stdout.write(svg);
   });
