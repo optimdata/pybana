@@ -256,18 +256,17 @@ class VegaTranslator:
 
     def _scales_y(self, state):
         for ax in state.valueaxes():
-            yield (
-                {
-                    "name": ax["id"],
-                    "domain": {
-                        "data": "table",
-                        "field": state.y(ax) + "|1"
-                        if state.stacked_applied(ax)
-                        else state.y(ax),
-                    },
-                    "nice": True,
-                    "range": "height",
+            if "min" in ax["scale"] and "max" in ax["scale"]:
+                domain = [ax["scale"]["min"], ax["scale"]["max"]]
+            else:
+                domain = {
+                    "data": "table",
+                    "field": state.y(ax) + "|1"
+                    if state.stacked_applied(ax)
+                    else state.y(ax),
                 }
+            yield (
+                {"name": ax["id"], "domain": domain, "nice": True, "range": "height"}
             )
 
     def scales(self, conf, state):
