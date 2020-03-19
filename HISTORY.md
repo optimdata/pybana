@@ -1,5 +1,9 @@
 ## History
 
+### 0.4.1
+
+- Fix `format_from_interval` for week intervals
+
 ### 0.4.0
 
 - Handle Category axe rotation

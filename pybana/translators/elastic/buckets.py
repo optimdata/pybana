@@ -58,7 +58,7 @@ def format_from_interval(interval):
         return "yyyy"
     if interval.endswith("q") or interval.endswith("M"):
         return "yyyy-MM"
-    if interval.endswith("d"):
+    if interval.endswith("d") or interval.endswith("w"):
         return "yyyy-MM-dd"
     if interval.endswith("h"):
         return "yyyy-MM-dd'T'HH'h'"
