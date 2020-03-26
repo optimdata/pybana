@@ -149,6 +149,8 @@ class TermsBucket(BaseBucket):
         aggs = {agg["id"]: agg for agg in state["aggs"]}
         if orderby in aggs and aggs[orderby]["type"] == "count":
             orderby = "_count"
+        if orderby == "custom":
+            orderby = agg["params"]["orderAgg"]["id"]
         return {
             "field": agg["params"]["field"],
             "size": agg["params"]["size"],
@@ -180,4 +182,7 @@ class BucketTranslator:
         for metric_agg in state["aggs"]:
             if metric_agg["id"] == agg["params"].get("orderBy"):
                 MetricTranslator().translate(ret, metric_agg, state)
+        if "orderAgg" in agg["params"]:
+            order_agg = agg["params"]["orderAgg"]
+            ret = ret.bucket(order_agg["id"], order_agg["type"], **order_agg["params"])
         return ret
