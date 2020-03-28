@@ -1,8 +1,16 @@
 # -*- coding: utf-8 -*-
 
+import hjson
+
 from pybana.helpers import percentage
 
-from .constants import KIBANA_SEED_COLORS
+from .constants import (
+    KIBANA_SEED_COLORS,
+    DEFAULT_WIDTH,
+    DEFAULT_PIE_WIDTH,
+    DEFAULT_HEIGHT,
+    DEFAULT_PADDING,
+)
 from .metrics import VEGA_METRICS
 from .visualization import ContextVisualization
 
@@ -13,9 +21,9 @@ class VegaTranslator:
     def conf(self, state):
         return {
             "$schema": "https://vega.github.io/schema/vega/v5.json",
-            "width": 200 if state.type() == "pie" else 800,
-            "height": 200,
-            "padding": 5,
+            "width": DEFAULT_PIE_WIDTH if state.type() == "pie" else DEFAULT_WIDTH,
+            "height": DEFAULT_HEIGHT,
+            "padding": DEFAULT_PADDING,
         }
 
     def data(self, conf, state, response):
@@ -592,14 +600,7 @@ class VegaTranslator:
         conf["marks"] = marks
         return conf
 
-    def translate(self, visualization, response, scope):
-        """
-        Transform a kibana visualization object and an elasticsearch_dsl response into a vega object.
-
-        :param elasticsearch_dsl.Document visualization: Visualization fetched from a kibana index.
-        :param elasticsearch_dsl.response.Response visualization: Visualization fetched from a kibana index.
-        :param Scope scope: The scope associated for data fetching.
-        """
+    def translate_legacy(self, visualization, response, scope):
         state = ContextVisualization(visualization=visualization, config=scope.config)
 
         ret = self.conf(state)
@@ -608,5 +609,27 @@ class VegaTranslator:
         ret = self.axes(ret, state)
         ret = self.legends(ret, state)
         ret = self.marks(ret, state, response)
-
         return ret
+
+    def translate_vega(self, visualization, response, scope):
+        ret = hjson.loads(visualization.visState["params"]["spec"])
+        data = ret["data"] if isinstance(ret["data"], dict) else ret["data"][0]
+        data.pop("url")
+        data["values"] = response.to_dict()
+        ret.setdefault("width", DEFAULT_WIDTH)
+        ret.setdefault("height", DEFAULT_HEIGHT)
+        ret.setdefault("padding", DEFAULT_PADDING)
+        return ret
+
+    def translate(self, visualization, response, scope):
+        """
+        Transform a kibana visualization object and an elasticsearch_dsl response into a vega object.
+
+        :param elasticsearch_dsl.Document visualization: Visualization fetched from a kibana index.
+        :param elasticsearch_dsl.response.Response visualization: Visualization fetched from a kibana index.
+        :param Scope scope: The scope associated for data fetching.
+        """
+        if visualization.visState["type"] == "vega":
+            return self.translate_vega(visualization, response, scope)
+        else:
+            return self.translate_legacy(visualization, response, scope)

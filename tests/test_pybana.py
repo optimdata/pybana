@@ -34,7 +34,8 @@ def load_fixtures(elastic, kibana, index):
     def actions():
         with open(datafn, "r") as fd:
             for line in fd:
-
+                if not line:
+                    continue
                 action = json.loads(line)
                 action["_index"] = index
                 yield action
@@ -94,7 +95,7 @@ def test_client():
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())
-    assert len(visualizations) == 23
+    assert len(visualizations) == 25
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.visState
     visualization.uiStateJSON
@@ -146,6 +147,33 @@ def test_translators():
             ):
                 response = search.execute()
                 VegaTranslator().translate(visualization, response, scope)
+
+
+def test_vega_visuzalization():
+    kibana = Kibana(PYBANA_INDEX)
+    load_fixtures(elastic, kibana, PYBANA_INDEX)
+    load_data(elastic, "pybana")
+    kibana.init_config()
+    translator = ElasticTranslator()
+    scope = Scope(
+        datetime.datetime(2019, 1, 1, tzinfo=pytz.utc),
+        datetime.datetime(2019, 1, 3, tzinfo=pytz.utc),
+        pytz.utc,
+        kibana.config(),
+    )
+    keys = [
+        "37589ee0-70f3-11ea-9898-e1fb79cbf2bc",
+        "da8f8510-7107-11ea-9898-e1fb79cbf2bc",
+    ]
+    for key in keys:
+        visualization = kibana.visualization(key)
+        search = translator.translate(visualization, scope)
+        assert (
+            search.to_dict()["aggs"]["category"]["date_histogram"]["interval"] == "1h"
+        )
+
+        response = search.execute()
+        VegaTranslator().translate(visualization, response, scope)
 
 
 def test_elastic_translator_helpers():

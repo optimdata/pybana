@@ -26,6 +26,7 @@ The vega rendering supports:
     - line (:warning: split lines is not supported)
     - histogram (:warning: split lines is not supported)
     - pie
+    - vega
 - Metrics
     - Count
     - Average

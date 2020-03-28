@@ -1,5 +1,9 @@
 ## History
 
+### 0.5.0
+
+- Add support for vega visualizations
+
 ### 0.4.2
 
 - Fix Add support for terms sorting by custom metric
