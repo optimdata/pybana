@@ -61,7 +61,9 @@ class DatasweetMetric(BaseMetric):
 
     def contribute(self, agg, bucket, response):
         ret = datasweet_eval(agg["params"]["formula"], bucket)
-        bucket[agg["id"]] = {"value": None if math.isnan(ret) else ret}
+        bucket[agg["id"]] = {
+            "value": None if isinstance(ret, float) and math.isnan(ret) else ret
+        }
         return ret
 
 
