@@ -1,5 +1,9 @@
 ## History
 
+### 0.5.2
+
+- Fix nan values in bucket due to datasweet formula
+
 ### 0.5.1
 
 - Fix case when a datasweet formula depends on other datasweet formula

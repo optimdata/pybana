@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import math
 from pybana.helpers.datasweet import datasweet_eval
 
 __all__ = ("VEGA_METRICS",)
@@ -60,7 +61,7 @@ class DatasweetMetric(BaseMetric):
 
     def contribute(self, agg, bucket, response):
         ret = datasweet_eval(agg["params"]["formula"], bucket)
-        bucket[agg["id"]] = {"value": ret}
+        bucket[agg["id"]] = {"value": None if math.isnan(ret) else ret}
         return ret
 
 
