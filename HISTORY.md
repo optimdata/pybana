@@ -1,5 +1,9 @@
 ## History
 
+### 0.5.3
+
+- Fix terms custom metric
+
 ### 0.5.2
 
 - Fix nan values in bucket due to datasweet formula

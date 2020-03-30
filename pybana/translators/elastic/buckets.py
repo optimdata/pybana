@@ -184,5 +184,5 @@ class BucketTranslator:
                 MetricTranslator().translate(ret, metric_agg, state)
         if "orderAgg" in agg["params"]:
             order_agg = agg["params"]["orderAgg"]
-            ret = ret.bucket(order_agg["id"], order_agg["type"], **order_agg["params"])
+            ret.bucket(order_agg["id"], order_agg["type"], **order_agg["params"])
         return ret
