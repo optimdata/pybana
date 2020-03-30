@@ -59,7 +59,9 @@ class DatasweetMetric(BaseMetric):
     aggtype = "datasweet_formula"
 
     def contribute(self, agg, bucket, response):
-        return datasweet_eval(agg["params"]["formula"], bucket)
+        ret = datasweet_eval(agg["params"]["formula"], bucket)
+        bucket[agg["id"]] = {"value": ret}
+        return ret
 
 
 VEGA_METRICS = {
