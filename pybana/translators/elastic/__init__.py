@@ -33,15 +33,18 @@ class ElasticTranslator:
 
         spec = hjson.loads(visualization.visState["params"]["spec"])
         data = spec["data"] if isinstance(spec["data"], dict) else spec["data"][0]
-        index = data["url"]["index"]
-        body = replace_autointerval(data["url"]["body"])
-        search = elasticsearch_dsl.Search(index=index).from_dict(body)
-        if data["url"].get("%timefield%"):
-            ts = data["url"]["%timefield%"]
-            search = search.filter(
-                "range",
-                **{ts: {"gte": scope.beg.isoformat(), "lte": scope.end.isoformat()}}
-            )
+        if "url" in data:
+            index = data["url"]["index"]
+            body = replace_autointerval(data["url"]["body"])
+            search = elasticsearch_dsl.Search(index=index).from_dict(body)
+            if data["url"].get("%timefield%"):
+                ts = data["url"]["%timefield%"]
+                search = search.filter(
+                    "range",
+                    **{ts: {"gte": scope.beg.isoformat(), "lte": scope.end.isoformat()}}
+                )
+        else:
+            search = elasticsearch_dsl.Search()[:0]
         return search
 
     def translate_legacy(self, visualization, scope):

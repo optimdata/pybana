@@ -1,5 +1,10 @@
 ## History
 
+### 0.5.4
+
+- Support vega viz without data.url attribute
+- Fix none type handling on datasweet eval
+
 ### 0.5.3
 
 - Fix terms custom metric
