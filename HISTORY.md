@@ -1,5 +1,9 @@
 ## History
 
+### 0.5.5
+
+- Clip line when y-axis extent is set
+
 ### 0.5.4
 
 - Support vega viz without data.url attribute

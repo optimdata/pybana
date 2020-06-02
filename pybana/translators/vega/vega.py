@@ -268,6 +268,8 @@ class VegaTranslator:
         for ax in state.valueaxes():
             if "min" in ax["scale"] and "max" in ax["scale"]:
                 domain = [ax["scale"]["min"], ax["scale"]["max"]]
+                nice = False
+                zero = False
             else:
                 domain = {
                     "data": "table",
@@ -275,8 +277,16 @@ class VegaTranslator:
                     if state.stacked_applied(ax)
                     else state.y(ax),
                 }
+                nice = True
+                zero = True
             yield (
-                {"name": ax["id"], "domain": domain, "nice": True, "range": "height"}
+                {
+                    "name": ax["id"],
+                    "domain": domain,
+                    "nice": nice,
+                    "range": "height",
+                    "zero": zero,
+                }
             )
 
     def scales(self, conf, state):
@@ -574,6 +584,10 @@ class VegaTranslator:
         marks = [
             {
                 "type": "group",
+                "clip": any(
+                    "min" in ax["scale"] and "max" in ax["scale"]
+                    for ax in state.valueaxes()
+                ),
                 "from": {
                     "facet": {
                         "data": "table",
