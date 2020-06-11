@@ -1,5 +1,9 @@
 ## History
 
+### 0.5.6
+
+- Fix packaging
+
 ### 0.5.5
 
 - Clip line when y-axis extent is set
