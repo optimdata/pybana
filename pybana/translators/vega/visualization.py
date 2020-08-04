@@ -11,10 +11,11 @@ class ContextVisualization:
     Represent a visualization with a context.
 
     :param Visualization visualization: Visualization deserialized.
-    :param config pybana.Config: Config of the kibana instance.
+    :param pybana.Config config: Config of the kibana instance.
     """
 
     def __init__(self, visualization, config):
+        self._index_pattern = visualization.index()
         self._state = visualization.visState.to_dict()
         self._ui_state = visualization.uiStateJSON.to_dict()
         self._config = config
@@ -33,6 +34,29 @@ class ContextVisualization:
 
     def type(self):
         return self._state["type"]
+
+    def get_agg(self, aggid):
+        """
+        Returns the agg corresponding to the agg identifier.
+        """
+        aggs = self._state["aggs"]
+        return [agg for agg in aggs if agg["id"] == aggid][0]
+
+    def is_duration_agg(self, agg):
+        """
+        Indicates if an aggregation is of type duration.
+
+        A field is considered as a duration if it's a number and if the format is something like '00:00:00'
+        """
+        params = agg["params"]
+        field = params.get("field")
+        field_formats = self._index_pattern.fieldFormatMap
+        fmt = field_formats.to_dict().get(field) if field and field_formats else None
+        return (
+            fmt
+            and fmt["id"] == "number"
+            and ":" in fmt.get("params", {}).get("pattern")
+        )
 
     def series_params(self, agg):
         return [
@@ -126,12 +150,15 @@ class ContextVisualization:
     def valueax(self, axid):
         return [ax for ax in self.valueaxes() if ax["id"] == axid][0]
 
+    def valueaxserie(self, ax):
+        """
+        Returns first serie of the given axe.
+        """
+        series = self._state["params"]["seriesParams"]
+        return [serie for serie in series if serie["valueAxis"] == ax["id"]][0]
+
     def valueaxtype(self, ax):
-        return [
-            serie
-            for serie in self._state["params"]["seriesParams"]
-            if serie["valueAxis"] == ax["id"]
-        ][0]["type"]
+        return self.valueaxserie(ax)["type"]
 
     def valueaxes(self):
         return self._state["params"].get("valueAxes", [])

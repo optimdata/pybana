@@ -331,6 +331,20 @@ class VegaTranslator:
                     }
                     if ax["scale"]["mode"] == "percentage":
                         axconf["format"] = ".0%"
+
+                    # If the serie corresponding to this axis is of type duration, we use a special encoding
+                    serie = state.valueaxserie(ax)
+                    agg = state.get_agg(aggid=serie["data"]["id"])
+                    if state.is_duration_agg(agg):
+                        axconf["encode"] = {
+                            "labels": {
+                                "update": {
+                                    "text": {
+                                        "signal": "format(datum.value / 3600, '02d') + ':' + format((datum.value % 3600) / 60, '02d') + ':' + format(datum.value % 60, '02d')"
+                                    }
+                                }
+                            }
+                        }
                     conf["axes"].append(axconf)
         return conf
 

@@ -55,6 +55,7 @@ def load_data(elastic, index):
                     "properties": {
                         "s": {"type": "keyword"},
                         "i": {"type": "integer"},
+                        "d": {"type": "integer"},
                         "f": {"type": "float"},
                         "ts": {"type": "date"},
                     }
@@ -74,6 +75,7 @@ def load_data(elastic, index):
                     "f": float(i),
                     "i": i,
                     "s": chr(100 + (i % 10)),
+                    "d": i,
                 },
             }
 
@@ -95,7 +97,7 @@ def test_client():
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())
-    assert len(visualizations) == 27
+    assert len(visualizations) == 28
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.visState
     visualization.uiStateJSON
@@ -152,6 +154,7 @@ def test_translators():
                 "c36b8b00-6f85-11ea-85b8-8f688e91da4a",
                 "e8c08560-7276-11ea-a6e2-834e20d9c131",
                 "5da362a0-732e-11ea-9c16-797f1f2fa4aa",
+                "96645fc0-d636-11ea-8206-6f7030d7dd42",
             ):
                 response = search.execute()
                 VegaTranslator().translate(visualization, response, scope)
