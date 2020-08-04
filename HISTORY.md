@@ -1,5 +1,9 @@
 ## History
 
+### 0.6.1
+
+- Fix `ContextVisualization.is_duration_agg`
+
 ### 0.6.0
 
 - Add support for duration formating for axes that represent a duration serie.

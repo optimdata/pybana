@@ -55,7 +55,7 @@ class ContextVisualization:
         return (
             fmt
             and fmt["id"] == "number"
-            and ":" in fmt.get("params", {}).get("pattern")
+            and ":" in fmt.get("params", {}).get("pattern", "")
         )
 
     def series_params(self, agg):
