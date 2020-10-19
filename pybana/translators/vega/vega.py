@@ -113,6 +113,8 @@ class VegaTranslator:
                     continue
                 metric = VEGA_METRICS[metric_agg["type"]]()
                 y = metric.contribute(metric_agg, node, response)
+                if y is None:
+                    continue
                 childpoint = point.copy()
                 # handling case where no bucket aggs
                 childpoint.setdefault("x", "all")

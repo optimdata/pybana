@@ -1,5 +1,9 @@
 ## History
 
+### 0.6.2
+
+- Fix when value is null. Then value is ignored.
+
 ### 0.6.1
 
 - Fix `ContextVisualization.is_duration_agg`
