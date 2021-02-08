@@ -1,5 +1,9 @@
 ## History
 
+### 0.6.3
+
+- Fix escaping of metric label
+
 ### 0.6.2
 
 - Fix when value is null. Then value is ignored.

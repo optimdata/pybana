@@ -535,7 +535,7 @@ class VegaTranslator:
             params = state.series_params(agg)
             if params["valueAxis"] != ax["id"]:
                 continue
-            label = params["data"]["label"]
+            label = params["data"]["label"].replace("'", "\\'")
             size = params.get("lineWidth") or 4
             circletest = (
                 f"datum.metric == '{label}'" if params["showCircles"] else "false"
