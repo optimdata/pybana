@@ -14,7 +14,7 @@ DEFAULT_CONFIG = {
     "timepicker:timeDefaults": json.dumps(
         {"from": "now-7d", "to": "now", "mode": "quick"}
     ),
-    "dateFormat:tz": "UTC",
+    "dateFormat:tz": None,
     "state:storeInSessionStorage": True,
     "telemetry:optIn": False,
     "defaultIndex": None,
