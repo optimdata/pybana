@@ -1,5 +1,9 @@
 ## History
 
+### 0.7.1
+
+- Fix handling of response in TopHitsMetrics
+
 ### 0.7.0
 
 - Add support for top_hits

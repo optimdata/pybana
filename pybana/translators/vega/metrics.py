@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import elasticsearch_dsl as esl
 import math
 from pybana.helpers.datasweet import datasweet_eval
 
@@ -80,7 +81,7 @@ class TopHitsMetric(BaseMetric):
 
     def contribute(self, agg, bucket, response):
         def flatten(value):
-            if isinstance(value, list):
+            if isinstance(value, (list, esl.AttrList)):
                 for item in value:
                     yield item
             else:
@@ -89,7 +90,7 @@ class TopHitsMetric(BaseMetric):
         values = [
             value
             for hit in bucket[agg["id"]]["hits"]["hits"]
-            for value in flatten(hit["_source"].to_dict()[agg["params"]["field"]])
+            for value in flatten(hit["_source"][agg["params"]["field"]])
             if value is not None
         ]
         aggregate = agg["params"]["aggregate"]
