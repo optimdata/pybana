@@ -13,7 +13,14 @@ import sys
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
-from pybana import Scope, ElasticTranslator, Kibana, VegaRenderer, VegaTranslator, VEGA_METRICS
+from pybana import (
+    Scope,
+    ElasticTranslator,
+    Kibana,
+    VegaRenderer,
+    VegaTranslator,
+    VEGA_METRICS,
+)
 from pybana.translators.elastic.buckets import (
     format_from_interval,
     compute_auto_interval,
@@ -77,7 +84,7 @@ def load_data(elastic, index):
                     "i": i,
                     "s": chr(100 + (i % 10)),
                     "d": i,
-                    "t": [float(i), float(i + 1)]
+                    "t": [float(i), float(i + 1)],
                 },
             }
 
@@ -166,7 +173,14 @@ def test_translators():
                 response = search.execute()
                 metric = VEGA_METRICS["top_hits"]()
                 state = json.loads(visualization.visualization.visState)
-                results = {"1": "l, k", "2": 47, "3": 48, "4": 46, "5": 141, "6": "48.0, 49.0, 47.0, 48.0"}
+                results = {
+                    "1": "l, k",
+                    "2": 47,
+                    "3": 48,
+                    "4": 46,
+                    "5": 141,
+                    "6": "48.0, 49.0, 47.0, 48.0",
+                }
                 for agg in state["aggs"]:
                     ret = metric.contribute(agg, response.aggregations, response)
                     assert ret == results[agg["id"]]
