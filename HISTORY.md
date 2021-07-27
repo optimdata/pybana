@@ -1,5 +1,10 @@
 ## History
 
+### 0.7.0
+
+- Add support for top_hits
+- Fix handle searches in dashboards
+
 ### 0.6.3
 
 - Fix escaping of metric label

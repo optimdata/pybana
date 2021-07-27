@@ -67,6 +67,43 @@ class DatasweetMetric(BaseMetric):
         return ret
 
 
+class TopHitsMetric(BaseMetric):
+    """
+    Metric for top_hits.
+
+    Careful, support is partial. Is not supported:
+    - handling of full _source
+    - handling of flatten
+    """
+
+    aggtype = "top_hits"
+
+    def contribute(self, agg, bucket, response):
+        def flatten(value):
+            if isinstance(value, list):
+                for item in value:
+                    yield item
+            else:
+                yield value
+
+        values = [
+            value
+            for hit in bucket[agg["id"]]["hits"]["hits"]
+            for value in flatten(hit["_source"].to_dict()[agg["params"]["field"]])
+            if value is not None
+        ]
+        aggregate = agg["params"]["aggregate"]
+        if aggregate == "sum":
+            return sum(values)
+        if aggregate == "min":
+            return min(values) if values else None
+        if aggregate == "max":
+            return max(values) if values else None
+        if aggregate == "average":
+            return sum(values) / len(values) if values else None
+        return ", ".join(map(str, values))
+
+
 VEGA_METRICS = {
     metric.aggtype: metric
     for metric in [
@@ -79,5 +116,6 @@ VEGA_METRICS = {
         MinMetric,
         StdDevMetric,
         SumMetric,
+        TopHitsMetric,
     ]
 }

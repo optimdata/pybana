@@ -6,7 +6,6 @@ import json
 Provide translators which translate metric aggregations defined using kibana syntax to elasticsearch syntax.
 
 Not supported:
-- Top Hit
 - Sibling pipeline aggregations
 - Parent pipeline aggregations
 """
@@ -115,6 +114,28 @@ class DatasweetMetric(BaseMetric):
         pass
 
 
+class TopHitsMetric(BaseMetric):
+    """
+    Translator for top_hits metric.
+
+    Careful, this metric is partially supported:
+    - date fields are not handled.
+    - scripted fields are not handled.
+    """
+
+    aggtype = "top_hits"
+
+    def translate(self, proxy, agg, state):
+        params = agg["params"]
+        proxy.metric(
+            agg["id"],
+            "top_hits",
+            sort={params["sortField"]: {"order": params["sortOrder"]}},
+            size=params["size"],
+            _source=params["field"],
+        )
+
+
 TRANSLATORS = {
     translator.aggtype: translator
     for translator in (
@@ -129,6 +150,7 @@ TRANSLATORS = {
         PercentilesMetric,
         StdDevMetric,
         SumMetric,
+        TopHitsMetric,
     )
 }
 

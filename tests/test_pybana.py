@@ -13,7 +13,7 @@ import sys
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
-from pybana import Scope, ElasticTranslator, Kibana, VegaRenderer, VegaTranslator
+from pybana import Scope, ElasticTranslator, Kibana, VegaRenderer, VegaTranslator, VEGA_METRICS
 from pybana.translators.elastic.buckets import (
     format_from_interval,
     compute_auto_interval,
@@ -57,6 +57,7 @@ def load_data(elastic, index):
                         "i": {"type": "integer"},
                         "d": {"type": "integer"},
                         "f": {"type": "float"},
+                        "t": {"type": "float"},
                         "ts": {"type": "date"},
                     }
                 }
@@ -76,6 +77,7 @@ def load_data(elastic, index):
                     "i": i,
                     "s": chr(100 + (i % 10)),
                     "d": i,
+                    "t": [float(i), float(i + 1)]
                 },
             }
 
@@ -97,7 +99,7 @@ def test_client():
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())
-    assert len(visualizations) == 28
+    assert len(visualizations) == 29
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.visState
     visualization.uiStateJSON
@@ -135,9 +137,11 @@ def test_translators():
             "pie",
             "line",
             "vega",
+            "table",
         ):
             search = translator.translate(visualization, scope)
-            if visualization.meta.id.split(":")[-1] in (
+            visualization_id = visualization.meta.id.split(":")[-1]
+            if visualization_id in (
                 "695c02f0-fb1a-11e9-84e4-078763638bf3",
                 "1c7226e0-ffd9-11e9-b6bd-4d907ad3c29d",
                 "cdecdff0-ffd9-11e9-b6bd-4d907ad3c29d",
@@ -158,6 +162,14 @@ def test_translators():
             ):
                 response = search.execute()
                 VegaTranslator().translate(visualization, response, scope)
+            if visualization_id in ("d6c8b900-eea7-11eb-8e30-87c8d06ba6ff",):
+                response = search.execute()
+                metric = VEGA_METRICS["top_hits"]()
+                state = json.loads(visualization.visualization.visState)
+                results = {"1": "l, k", "2": 47, "3": 48, "4": 46, "5": 141, "6": "48.0, 49.0, 47.0, 48.0"}
+                for agg in state["aggs"]:
+                    ret = metric.contribute(agg, response.aggregations, response)
+                    assert ret == results[agg["id"]]
 
 
 def test_vega_visuzalization():
