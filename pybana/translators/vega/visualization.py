@@ -97,7 +97,12 @@ class ContextVisualization:
         elif self.type() in ("table", "metric"):
             if agg["type"] == "count":
                 return "Count"
-            return "%s - %s" % (agg["type"], agg["params"]["field"])
+            return "%s - %s" % (
+                agg["type"],
+                agg["params"]["field"]
+                if "field" in agg["params"]
+                else "Formula %(id)s" % agg,
+            )
         return self.series_params(agg)["data"]["label"]
 
     def group_aggs(self):
