@@ -1,5 +1,9 @@
 ## History
 
+### 0.7.2
+
+- Fix metric label for datasweet formula
+
 ### 0.7.1
 
 - Fix handling of response in TopHitsMetrics
