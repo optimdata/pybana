@@ -127,3 +127,5 @@ dmypy.json
 # MacOS
 .DS_Store
 
+# Vim
+.*.sw[op]

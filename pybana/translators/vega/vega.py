@@ -643,10 +643,18 @@ class VegaTranslator:
 
     def translate_vega(self, visualization, response, scope):
         ret = hjson.loads(visualization.visState["params"]["spec"])
-        data = ret["data"] if isinstance(ret["data"], dict) else ret["data"][0]
-        if "url" in data:
-            data.pop("url")
-            data["values"] = response.to_dict()
+
+        def translate_data_item(data, response):
+            if "url" in data:
+                data.pop("url")
+                data["values"] = response.to_dict()
+
+        data = ret["data"]
+        if isinstance(data, dict):
+            translate_data_item(data, response)
+        else:
+            for index, data_item in enumerate(data):
+                translate_data_item(data_item, response[index])
         ret.setdefault("width", DEFAULT_WIDTH)
         ret.setdefault("height", DEFAULT_HEIGHT)
         ret.setdefault("padding", DEFAULT_PADDING)

@@ -7,16 +7,16 @@ import json
 from pybana.translators.elastic.buckets import BucketTranslator, compute_auto_interval
 from pybana.translators.elastic.metrics import MetricTranslator
 from .filter import FilterTranslator
+from .utils import SearchListProxy
 
 __all__ = ("ElasticTranslator", "FilterTranslator")
 
 
 class ElasticTranslator:
     def translate_vega(self, visualization, scope):
-        # TODO: handle magic keyword %timefilter%
-        def replace_autointerval(node):
+        def replace_magic_keywords(node):
             if isinstance(node, list):
-                return [replace_autointerval(child) for child in node]
+                return [replace_magic_keywords(child) for child in node]
             elif isinstance(node, dict):
                 ret = {}
                 for key, val in node.items():
@@ -26,26 +26,50 @@ class ElasticTranslator:
                         and val.get("%autointerval%")
                     ):
                         ret[key] = compute_auto_interval("auto", scope.beg, scope.end)
+                    elif key == "%timefilter%":
+                        if val == "min":
+                            ret = scope.beg.isoformat()
+                        elif val == "max":
+                            ret = scope.end.isoformat()
+                        elif val is True:
+                            # TODO: handle shift and unit
+                            ret = {
+                                "min": scope.beg.isoformat(),
+                                "max": scope.end.isoformat(),
+                            }
+
                     else:
-                        ret[key] = replace_autointerval(val)
+                        ret[key] = replace_magic_keywords(val)
                 return ret
             return node
 
+        def translate_data_item(data):
+            if "url" in data:
+                index = data["url"]["index"]
+                body = replace_magic_keywords(data["url"]["body"])
+                search = elasticsearch_dsl.Search(index=index).update_from_dict(body)
+                if data["url"].get("%timefield%"):
+                    ts = data["url"]["%timefield%"]
+                    search = search.filter(
+                        "range",
+                        **{
+                            ts: {
+                                "gte": scope.beg.isoformat(),
+                                "lte": scope.end.isoformat(),
+                            }
+                        }
+                    )
+            else:
+                search = elasticsearch_dsl.Search()[:0]
+            return search
+
         spec = hjson.loads(visualization.visState["params"]["spec"])
-        data = spec["data"] if isinstance(spec["data"], dict) else spec["data"][0]
-        if "url" in data:
-            index = data["url"]["index"]
-            body = replace_autointerval(data["url"]["body"])
-            search = elasticsearch_dsl.Search(index=index).from_dict(body)
-            if data["url"].get("%timefield%"):
-                ts = data["url"]["%timefield%"]
-                search = search.filter(
-                    "range",
-                    **{ts: {"gte": scope.beg.isoformat(), "lte": scope.end.isoformat()}}
-                )
-        else:
-            search = elasticsearch_dsl.Search()[:0]
-        return search
+        data = spec["data"]
+        return (
+            translate_data_item(data)
+            if isinstance(data, dict)
+            else SearchListProxy([translate_data_item(d) for d in data])
+        )
 
     def translate_legacy(self, visualization, scope):
         index_pattern = visualization.index()

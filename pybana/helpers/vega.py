@@ -13,9 +13,12 @@ class VegaRenderer:
     Renderer which takes in input a vega spec and returns the svg code
     """
 
+    def __init__(self, vega_bin=VEGA_BIN):
+        self.vega_bin = vega_bin
+
     def to_svg(self, spec):
         p = subprocess.Popen(
-            [VEGA_BIN],
+            [self.vega_bin],
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
