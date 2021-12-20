@@ -7,6 +7,7 @@ import json
 from pybana.translators.elastic.buckets import BucketTranslator, compute_auto_interval
 from pybana.translators.elastic.metrics import MetricTranslator
 from .filter import FilterTranslator
+from .utils import SearchListProxy
 
 __all__ = ("ElasticTranslator", "FilterTranslator")
 
@@ -67,7 +68,7 @@ class ElasticTranslator:
         return (
             translate_data_item(data)
             if isinstance(data, dict)
-            else [translate_data_item(d) for d in data]
+            else SearchListProxy([translate_data_item(d) for d in data])
         )
 
     def translate_legacy(self, visualization, scope):
