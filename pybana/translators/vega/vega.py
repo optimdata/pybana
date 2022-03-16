@@ -33,6 +33,18 @@ class VegaTranslator:
             conf = self.data_line_bar(conf, state, response)
         return conf
 
+    def _is_duration_bucket(self, state, agg, metric):
+        return state.is_duration_agg(agg) and metric.aggtype in [
+            "avg",
+            "median",
+            "min",
+            "max",
+            "sum",
+        ]
+
+    def _format_duration(self, duration):
+        return f"{(duration // 3600):.0f}:{(duration % 3600) // 60:.0f}:{duration % 3600 % 60:.0f}"
+
     def data_pie(self, conf, state, response):
         conf["data"] = [
             {
@@ -71,13 +83,19 @@ class VegaTranslator:
                     label = state.metric_label(metric_agg)
                     group = bucket["key"]
                     ratio = percentage(y, sumbuckets)
+                    tooltip_display_value = f"{y}/{sumbuckets}"
+                    if self._is_duration_bucket(state, metric_agg, metric):
+                        tooltip_display_value = self._format_duration(y)
+
                     conf["data"][0]["values"].append(
                         {
                             "y": y,
                             "metric": label,
                             "segment": segment_it,
                             "group": group,
-                            "tooltip": {group: f"{y}/{sumbuckets} ({ratio:.2f}%)"},
+                            "tooltip": {
+                                group: f"{tooltip_display_value} ({ratio:.2f}%)"
+                            },
                             "label": "%s (%.2f%%)" % (group, ratio),
                         }
                     )
@@ -128,7 +146,12 @@ class VegaTranslator:
                     childpoint.update(
                         {state.y(ax): y, "axis": series_params["valueAxis"]}
                     )
-                tooltip = {"x": childpoint["x"], childpoint["metric"]: y}
+                tooltip = {
+                    "x": childpoint["x"],
+                    childpoint["metric"]: self._format_duration(y)
+                    if self._is_duration_bucket(state, metric_agg, metric)
+                    else y,
+                }
                 if childpoint["group"]:
                     tooltip["group"] = childpoint["group"]
                 childpoint["tooltip"] = tooltip
