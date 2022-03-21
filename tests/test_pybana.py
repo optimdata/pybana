@@ -256,7 +256,7 @@ def test_vega_renderer():
 def test_datasweet():
     import pybana.helpers.datasweet as ds
 
-    assert ds.ds_avg(0, 1) == .5
+    assert ds.ds_avg(0, 1) == 0.5
     assert ds.ds_count(0, 1) == 2
     assert ds.ds_cusum(0, 1) == [0, 1]
     assert ds.ds_derivative(0, 1)[1] == 1
@@ -265,6 +265,16 @@ def test_datasweet():
     assert ds.ds_next(0, 1)[0] == 1
     assert ds.ds_prev(0, 1)[1] == 0
     assert ds.ds_sum(0, 1) == 1
+    assert ds.ds_if(1, 2, 0) == 2
+    assert ds.ds_if([1, 0, 1], "a", "b") == ["a", "b", "a"]
+    assert ds.ds_if([1, 0, 1], ["a", "a", "a"], ["b", "b", "b"]) == ["a", "b", "a"]
+    assert ds.ds_ifnan(1, 0) == 1
+    assert ds.ds_ifnan([1, "test", float("nan"), "1"], "default") == [
+        1,
+        "default",
+        "default",
+        "1",
+    ]
 
     assert ds.is_variable("agg1")
     assert not ds.is_variable("xagg1")

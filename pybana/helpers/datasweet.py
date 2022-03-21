@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import ast
+import math
 import re
 
 __all__ = ("DatasweetTransformer",)
@@ -61,14 +62,42 @@ def ds_sum(*args):
     return sum(args)
 
 
+def ds_if(cond, yes, no):
+    if isinstance(cond, list):
+        out = []
+        for i, cond_item in enumerate(cond):
+            out.append(
+                ds_if(
+                    cond_item,
+                    yes
+                    if not isinstance(yes, list)
+                    else yes[i]
+                    if len(yes) > i
+                    else None,
+                    no if not isinstance(no, list) else no[i] if len(no) > i else None,
+                )
+            )
+        return out
+    return yes if cond else no
+
+
+def ds_ifnan(arg, default_value):
+    if isinstance(arg, list):
+        return [ds_ifnan(arg_item, default_value) for arg_item in arg]
+    try:
+        return default_value if math.isnan(float(arg)) else arg
+    except (ValueError, TypeError):
+        return default_value
+
+
 FUNCS = {
     "avg": ds_avg,
     "count": ds_count,
     "cusum": ds_cusum,
     "derivative": ds_derivative,
     # "filter": TODO,
-    # "if": TODO,
-    # "ifnan": TODO,
+    "_if": ds_if,
+    "ifnan": ds_ifnan,
     "min": ds_min,
     "max": ds_max,
     # "mvavg": TODO,
@@ -94,7 +123,8 @@ class DatasweetTransformer(ast.NodeTransformer):
 
 
 def datasweet_eval(expr, bucket):
-    tree = ast.parse(expr, mode="eval")
+    fixed_expr = re.sub(r"if\(([^)]*)\)", r"_if(\1)", expr)
+    tree = ast.parse(fixed_expr, mode="eval")
     tree = DatasweetTransformer().visit(tree)
     scope = {}
     for key, value in bucket.items():
