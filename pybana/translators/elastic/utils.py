@@ -31,6 +31,11 @@ def get_proxy_method(method_name):
     return proxy_method
 
 
-for name, method in inspect.getmembers(Search, predicate=inspect.isfunction):
+for name, method in inspect.getmembers(
+    Search,
+    predicate=lambda v: inspect.isfunction(v)
+    or inspect.ismethod(v)
+    or inspect.isdatadescriptor(v),
+):
     if not name.startswith("__"):
         setattr(SearchListProxy, name, get_proxy_method(name))
