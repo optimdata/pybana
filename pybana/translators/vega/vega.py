@@ -164,6 +164,7 @@ class VegaTranslator:
             key = child.get("key_as_string") or child.get("key")
             if agg["schema"] == "segment":
                 childpoint["x"] = key
+                childpoint["key"] = child.get("key")
             else:
                 childpoint.setdefault("groups", []).append(key)
             for obj in self._iter_response(
@@ -215,10 +216,14 @@ class VegaTranslator:
         return conf
 
     def _scale_x(self, state):
+        domain = {"data": "table", "field": "x"}
+        segment_aggs = state.segment_aggs()
+        if segment_aggs and segment_aggs[0]["type"] in ["date_histogram", "date_range"]:
+            domain["sort"] = {"field": "key"}
         return {
             "name": "xscale",
             "type": "band" if state.type() == "histogram" else "point",
-            "domain": {"data": "table", "field": "x"},
+            "domain": domain,
             "range": "width",
             "padding": 0.05,
             "round": True,
