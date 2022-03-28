@@ -129,9 +129,13 @@ def convert(fmt, ignore=True):
 
 def format_timestamp(timestamp, fmt=None, locale=None):
     value = pendulum.from_timestamp(timestamp * 1e-3)
-    return (
-        value.isoformat() if fmt is None else value.format(convert(fmt), locale=locale)
-    )
+    if fmt:
+        _fmt = convert(fmt)
+        try:
+            return value.format(_fmt, locale=locale)
+        except ValueError:
+            return value.format(_fmt)
+    return value.isoformat()
 
 
 def get_scaled_date_format(config, interval):
