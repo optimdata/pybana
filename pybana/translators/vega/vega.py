@@ -390,7 +390,7 @@ class VegaTranslator:
         conf["legends"] = [
             {
                 "fill": "groupcolor",
-                "title": "Series",
+                "title": "",
                 "orient": state._state["params"]["legendPosition"],
                 # TODO: offset should be dynamic given the data to prevent label/legend overlapping
                 "offset": 150,
@@ -403,7 +403,7 @@ class VegaTranslator:
             conf["legends"] = [
                 {
                     "fill": "groupcolor",
-                    "title": "Series",
+                    "title": "",
                     "columns": 1
                     if state._state["params"]["legendPosition"] in ("left", "right")
                     else 10,
@@ -414,7 +414,7 @@ class VegaTranslator:
             conf["legends"] = [
                 {
                     "fill": "metriccolor",
-                    "title": "Series",
+                    "title": "",
                     "columns": 1
                     if state._state["params"]["legendPosition"] in ("left", "right")
                     else 10,
