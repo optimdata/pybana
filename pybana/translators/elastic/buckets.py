@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from datetime import timedelta
 import json
 
 from .metrics import MetricTranslator
@@ -51,6 +52,20 @@ def compute_auto_interval(interval, beg, end):
         else:
             return "1s"
     return f"1{interval}"
+
+
+def duration_from_interval(interval):
+    if interval.endswith("y"):
+        return timedelta(years=1)
+    if interval.endswith("q") or interval.endswith("M"):
+        return timedelta(months=1)
+    if interval.endswith("w"):
+        return timedelta(weeks=1)
+    if interval.endswith("d"):
+        return timedelta(days=1)
+    if interval.endswith("h"):
+        return timedelta(hours=1)
+    return timedelta(seconds=1)
 
 
 def format_from_interval(interval):

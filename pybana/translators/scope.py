@@ -13,8 +13,9 @@ class Scope:
     :param config pybana.Config: Config of the kibana instance.
     """
 
-    def __init__(self, beg, end, tzinfo, config):
+    def __init__(self, beg, end, tzinfo, config, locale=None):
         self.beg = beg
         self.end = end
         self.tzinfo = tzinfo
+        self.locale = locale
         self.config = config

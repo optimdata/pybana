@@ -289,3 +289,16 @@ def test_datasweet():
     with pytest.raises(ValueError):
         tree = ast.parse("x + 1", mode="eval")
         tree = ds.DatasweetTransformer().visit(tree)
+
+
+def test_datetime():
+    import pybana.helpers.datetime as dt
+
+    assert dt.convert("") == ""
+    assert dt.convert("Y") == "Y"
+    assert dt.convert("w") is None
+    assert dt.convert("llll") == "LLLL"
+    assert dt.convert("[coucou]") == "[coucou]"
+    assert dt.convert("Y [coucou]") == "Y [coucou]"
+    assert dt.convert("[coucou] Y"), "[coucou] Y"
+    assert dt.convert("[a [coucou]]"), "[a [coucou]]"

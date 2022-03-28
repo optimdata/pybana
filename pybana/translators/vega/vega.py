@@ -2,7 +2,11 @@
 
 import hjson
 
-from pybana.helpers import percentage
+from pybana.helpers import format_timestamp, get_scaled_date_format, percentage
+from pybana.translators.elastic.buckets import (
+    compute_auto_interval,
+    duration_from_interval,
+)
 
 from .constants import (
     KIBANA_SEED_COLORS,
@@ -26,11 +30,11 @@ class VegaTranslator:
             "padding": DEFAULT_PADDING,
         }
 
-    def data(self, conf, state, response):
+    def data(self, conf, state, response, scope):
         if state.type() == "pie":
             conf = self.data_pie(conf, state, response)
         else:
-            conf = self.data_line_bar(conf, state, response)
+            conf = self.data_line_bar(conf, state, response, scope)
         return conf
 
     def _is_duration_bucket(self, state, agg, metric):
@@ -103,7 +107,24 @@ class VegaTranslator:
             rec(0)
         return conf
 
-    def _iter_response(self, node, bucket_aggs, it, point, state, response):
+    def _get_node_key(self, node, agg, scaled_date_format, locale):
+        if agg["type"] == "date_histogram":
+            key = format_timestamp(node.get("key"), scaled_date_format, locale)
+        else:
+            key = node.get("key_as_string") or node.get("key")
+        return key
+
+    def _iter_response(
+        self,
+        node,
+        bucket_aggs,
+        it,
+        point,
+        state,
+        response,
+        scaled_date_format=None,
+        locale=None,
+    ):
         """
         Iterate through response and yield each point.
 
@@ -121,6 +142,8 @@ class VegaTranslator:
         :param point: The point currently being filled.
         :param state: Visualization state.
         :param response: Elasticsearch response.
+        :param scaled_date_format: Date format for date histograms
+        :param locale: Locale for date formatting
         """
         if it == len(bucket_aggs):
             point["group"] = " - ".join(
@@ -161,19 +184,42 @@ class VegaTranslator:
         aggnode = node[agg["id"]]
         for child in aggnode["buckets"]:
             childpoint = point.copy()
-            key = child.get("key_as_string") or child.get("key")
+            key = self._get_node_key(child, agg, scaled_date_format, locale)
             if agg["schema"] == "segment":
                 childpoint["x"] = key
                 childpoint["key"] = child.get("key")
             else:
                 childpoint.setdefault("groups", []).append(key)
             for obj in self._iter_response(
-                child, bucket_aggs, it + 1, childpoint, state, response
+                child,
+                bucket_aggs,
+                it + 1,
+                childpoint,
+                state,
+                response,
+                scaled_date_format,
+                locale,
             ):
                 yield obj
 
-    def data_line_bar(self, conf, state, response):
+    def data_line_bar(self, conf, state, response, scope):
         data = {"name": "table", "values": []}
+        scaled_date_format = None
+        segment_aggs = state.segment_aggs()
+        if segment_aggs:
+            for segment_agg in segment_aggs:
+                if segment_agg["type"] == "date_histogram":
+                    scaled_date_format = get_scaled_date_format(
+                        scope.config,
+                        duration_from_interval(
+                            compute_auto_interval(
+                                segment_agg.get("interval", "auto"),
+                                scope.beg,
+                                scope.end,
+                            )
+                        ),
+                    )
+                    break
         for ax in state.valueaxes():
             if state.groups_stacked(ax):
                 data["transform"] = [
@@ -202,7 +248,14 @@ class VegaTranslator:
                 ]
 
         for item in self._iter_response(
-            response.aggregations.to_dict(), state.bucket_aggs(), 0, {}, state, response
+            response.aggregations.to_dict(),
+            state.bucket_aggs(),
+            0,
+            {},
+            state,
+            response,
+            scaled_date_format,
+            scope.locale,
         ):
             data["values"].append(item)
 
@@ -219,7 +272,7 @@ class VegaTranslator:
         domain = {"data": "table", "field": "x"}
         segment_aggs = state.segment_aggs()
         if segment_aggs and segment_aggs[0]["type"] in ["date_histogram", "date_range"]:
-            domain["sort"] = {"field": "key"}
+            domain["sort"] = {"field": "key", "op": "values"}
         return {
             "name": "xscale",
             "type": "band" if state.type() == "histogram" else "point",
@@ -663,7 +716,7 @@ class VegaTranslator:
         state = ContextVisualization(visualization=visualization, config=scope.config)
 
         ret = self.conf(state)
-        ret = self.data(ret, state, response)
+        ret = self.data(ret, state, response, scope)
         ret = self.scales(ret, state)
         ret = self.axes(ret, state)
         ret = self.legends(ret, state)
