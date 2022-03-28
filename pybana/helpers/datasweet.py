@@ -78,7 +78,11 @@ def ds_if(cond, yes, no):
                 )
             )
         return out
-    return yes if cond else no
+    try:
+        _yes = float(yes)
+        return ds_ifnan(_yes if cond else no, no)
+    except (ValueError, TypeError):
+        return yes if cond else no
 
 
 def ds_ifnan(arg, default_value):
