@@ -4,8 +4,14 @@ import json
 import os
 import subprocess
 
-__all__ = ("VegaRenderer",)
+__all__ = ("InvalidVegaSpecException", "VegaRenderer")
 VEGA_BIN = os.path.join(os.path.dirname(__file__), "../../bin/vega-cli")
+
+
+class InvalidVegaSpecException(Exception):
+    def __init__(self, message, vega_cli_traceback, *args, **kwargs):
+        super().__init__(self, message, *args, **kwargs)
+        self.vega_cli_traceback = vega_cli_traceback
 
 
 class VegaRenderer:
@@ -23,4 +29,9 @@ class VegaRenderer:
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        return p.communicate(input=json.dumps(spec).encode())[0].decode()
+        result = p.communicate(input=json.dumps(spec).encode())
+        if result[0]:
+            return result[0].decode()
+        raise InvalidVegaSpecException(
+            "Error when rendering vega visualization", result[1].decode()
+        )
