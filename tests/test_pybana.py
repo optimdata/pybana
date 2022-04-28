@@ -284,6 +284,11 @@ def test_datasweet():
         == 1.5
     )
 
+    assert ds.datasweet_eval("floor(agg1)", {"1": {"value": 1.23}}) == 1
+    assert ds.datasweet_eval("round(agg1)", {"1": {"value": 4.56}}) == 5
+    assert ds.datasweet_eval("ceil(agg1)", {"1": {"value": 7.89}}) == 8
+    assert ds.datasweet_eval("trunc(agg1)", {"1": {"value": 7.89}}) == 7
+
     assert ds.datasweet_eval("1 / 0", {}) is None
 
     with pytest.raises(ValueError):

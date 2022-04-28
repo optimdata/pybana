@@ -96,10 +96,12 @@ def ds_ifnan(arg, default_value):
 
 FUNCS = {
     "avg": ds_avg,
+    "ceil": math.ceil,
     "count": ds_count,
     "cusum": ds_cusum,
     "derivative": ds_derivative,
     # "filter": TODO,
+    "floor": math.floor,
     "_if": ds_if,
     "ifnan": ds_ifnan,
     "min": ds_min,
@@ -107,7 +109,9 @@ FUNCS = {
     # "mvavg": TODO,
     "next": ds_next,
     "prev": ds_prev,
+    "round": round,
     "sum": ds_sum,
+    "trunc": math.trunc,
 }
 
 
