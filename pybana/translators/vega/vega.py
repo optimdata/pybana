@@ -170,7 +170,7 @@ class VegaTranslator:
                         {state.y(ax): y, "axis": series_params["valueAxis"]}
                     )
                 tooltip = {
-                    "x": childpoint["x"],
+                    childpoint["x_label"]: childpoint["x"],
                     childpoint["metric"]: self._format_duration(y)
                     if self._is_duration_bucket(state, metric_agg, metric)
                     else y,
@@ -188,6 +188,10 @@ class VegaTranslator:
             if agg["schema"] == "segment":
                 childpoint["x"] = key
                 childpoint["key"] = child.get("key")
+                agg_params = agg.get("params", {})
+                childpoint["x_label"] = (
+                    agg_params.get("customLabel") or agg_params.get("field") or "x"
+                )
             else:
                 childpoint.setdefault("groups", []).append(key)
             for obj in self._iter_response(
