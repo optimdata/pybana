@@ -531,7 +531,7 @@ class VegaTranslator:
                             "fill": {"value": "#000"},
                             # Hide labels for small angles
                             "fillOpacity": {
-                                "signal": "datum.endAngle - datum.startAngle < .1 ? 0 : 1"
+                                "signal": "datum.endAngle - datum.startAngle < .3 ? 0 : 1"
                             },
                             "align": {
                                 "signal": "(datum.startAngle + datum.endAngle)/2 < 3.14 ? 'left' : 'right'"
