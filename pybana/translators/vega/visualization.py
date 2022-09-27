@@ -84,7 +84,7 @@ class ContextVisualization:
     def metric_label(self, agg):
         if agg["params"].get("customLabel"):
             return agg["params"]["customLabel"]
-        if self.type() in ("pie",):
+        if self.type() in ("pie", "gauge"):
             if agg["type"] == "count":
                 return "Count"
             elif agg["type"] == "sum":

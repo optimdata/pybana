@@ -15,6 +15,7 @@ from .constants import (
     DEFAULT_HEIGHT,
     DEFAULT_PADDING,
 )
+from .colormaps import get_interval_color
 from .metrics import VEGA_METRICS
 from .visualization import ContextVisualization
 
@@ -25,14 +26,16 @@ class VegaTranslator:
     def conf(self, state):
         return {
             "$schema": "https://vega.github.io/schema/vega/v5.json",
-            "width": DEFAULT_PIE_WIDTH if state.type() == "pie" else DEFAULT_WIDTH,
+            "width": DEFAULT_PIE_WIDTH
+            if state.type() in ["pie", "gauge"]
+            else DEFAULT_WIDTH,
             "height": DEFAULT_HEIGHT,
             "padding": DEFAULT_PADDING,
         }
 
     def data(self, conf, state, response, scope):
-        if state.type() == "pie":
-            conf = self.data_pie(conf, state, response)
+        if state.type() in ["pie", "gauge"]:
+            conf = self.data_single_metric(conf, state, response)
         else:
             conf = self.data_line_bar(conf, state, response, scope)
         return conf
@@ -49,15 +52,11 @@ class VegaTranslator:
     def _format_duration(self, duration):
         return f"{(duration // 3600):.0f}:{(duration % 3600) // 60:.0f}:{duration % 3600 % 60:.0f}"
 
-    def data_pie(self, conf, state, response):
-        conf["data"] = [
-            {
-                "name": "table",
-                "values": [],
-                "transform": [{"type": "pie", "field": "y"}],
-            }
-        ]
-        # In case of a pie, there is only one metric agg
+    def data_single_metric(self, conf, state, response):
+        conf["data"] = [{"name": "table", "values": []}]
+        if state.type() == "pie":
+            conf["data"][0]["transform"] = ([{"type": "pie", "field": "y"}],)
+        # In case of a pie or gauge, there is only one metric agg
         metric_agg = state.metric_aggs()[0]
         metric = VEGA_METRICS[metric_agg["type"]]()
         if state.singleton():
@@ -295,7 +294,7 @@ class VegaTranslator:
         }
 
     def _scales_metric(self, state, conf):
-        if state.type() == "pie":
+        if state.type() in ["pie", "gauge"]:
             return
         scheme = []
         domain = []
@@ -439,6 +438,8 @@ class VegaTranslator:
     def legends(self, conf, state):
         if state.type() == "pie":
             conf = self.legends_pie(conf, state)
+        elif state.type() == "gauge":
+            pass
         else:
             conf = self.legends_line_bar(conf, state)
         return conf
@@ -483,8 +484,8 @@ class VegaTranslator:
     def marks(self, conf, state, response):
         if state.type() == "pie":
             conf = self.marks_pie(conf, state, response)
-        elif state.type() == "histogram":
-            conf = self.marks_bar(conf, state, response)
+        elif state.type() == "gauge":
+            conf = self.marks_gauge(conf, state, response)
         else:
             conf = self.marks_bar(conf, state, response)
         return conf
@@ -542,6 +543,250 @@ class VegaTranslator:
                     },
                 }
             )
+        return conf
+
+    def marks_gauge(self, conf, state, response):
+        colors_range = sorted(
+            state._state["params"]["gauge"]["colorsRange"],
+            key=lambda x: (x["from"], x["to"]),
+        )
+        color_schema_name = state._state["params"]["gauge"]["colorSchema"]
+        invert_colors = state._state["params"]["gauge"].get("invertColors", False)
+        show_labels = state._state["params"]["gauge"]["labels"]["show"]
+        sub_text = state._state["params"]["gauge"]["style"].get("subText", None)
+        for i, color_range in enumerate(colors_range):
+            # Set up range colors
+            range_color = color_range.get(
+                "color",
+                get_interval_color(
+                    color_schema_name, i, len(colors_range) - 1, invert_colors
+                ),
+            )
+            color_range["color"] = range_color
+
+        max_value = max(r["to"] for r in colors_range)
+        min_value = min(r["from"] for r in colors_range)
+        main_value = conf["data"][0]["values"][0].get("y")
+        percentage_mode = state._state["params"]["gauge"].get("percentageMode", False)
+
+        def get_color(value):
+            color = "black"
+            for color_range in colors_range:
+                if value >= color_range["from"]:
+                    color = color_range["color"]
+                if value < color_range["to"]:
+                    break
+            return color
+
+        fill_color = get_color(main_value)
+        ticks = []
+        tick_step = (max_value - min_value) / 10
+        for tick_index in range(11):
+            tick_value = tick_index * tick_step + min_value
+            ticks.append(
+                {"value": tick_index * tick_step, "color": get_color(tick_value)}
+            )
+        conf["signals"] = [
+            {"name": "centerX", "update": "width/2"},
+            {
+                "name": "centerY",
+                "update": "height/2 + height/2*sin(PI/10)/(1-sin(PI/10)))",
+            },
+            {
+                "name": "outerRadius",
+                "update": "radiusRef",
+            },
+            {"name": "radiusRef", "update": "min(centerX, centerY)"},
+            {"name": "innerRadius", "update": "outerRadius - outerRadius * 0.2"},
+            {"name": "maxValue", "update": f"{max_value}"},
+            {"name": "minValue", "update": f"{min_value}"},
+            {"name": "mainValue", "update": f"{main_value}"},
+            {"name": "usedValue", "update": "min(max(minValue, mainValue), maxValue)"},
+            {"name": "fontFactor", "update": "(radiusRef/5)/25"},
+        ]
+        conf["data"].append(
+            {
+                "name": "ticks",
+                "values": ticks,
+                "transform": [
+                    {
+                        "type": "formula",
+                        "expr": "datum.value + minValue",
+                        "as": "value_2",
+                    },
+                    {
+                        "type": "formula",
+                        "as": "radianRef",
+                        "expr": "6*PI/5 * (datum.value/(maxValue - minValue)) - PI/10",
+                    },
+                    {
+                        "type": "formula",
+                        "as": "x",
+                        "expr": "centerX - (innerRadius * cos(datum.radianRef))",
+                    },
+                    {
+                        "type": "formula",
+                        "as": "y",
+                        "expr": "centerY - (innerRadius * sin(datum.radianRef))",
+                    },
+                ],
+            }
+        )
+        conf["scales"] = [
+            {
+                "name": "gaugeScale",
+                "type": "linear",
+                "domain": {"data": "ticks", "field": "value_2"},
+                "zero": False,
+                "range": {"signal": "[-3*PI/5, 3*PI/5]"},
+            },
+            {
+                "name": "tickScale",
+                "type": "linear",
+                "domain": {"data": "ticks", "field": "value"},
+                "range": {"signal": "[-3*PI/5, 3*PI/5]"},
+            },
+        ]
+        conf["marks"] = [
+            {
+                "type": "arc",
+                "name": "gauge",
+                "encode": {
+                    "enter": {
+                        "x": {"signal": "centerX"},
+                        "y": {"signal": "centerY"},
+                        "startAngle": {"signal": "-3*PI/5"},
+                        "endAngle": {"signal": "3*PI/5"},
+                        "outerRadius": {"signal": "outerRadius"},
+                        "innerRadius": {"signal": "innerRadius"},
+                        "fill": {"value": "rgb(235,235,235)"},
+                    }
+                },
+            },
+            {
+                "type": "arc",
+                "encode": {
+                    "enter": {"startAngle": {"signal": "-3*PI/5"}},
+                    "update": {
+                        "x": {"signal": "centerX"},
+                        "y": {"signal": "centerY"},
+                        "innerRadius": {"signal": "innerRadius"},
+                        "outerRadius": {"signal": "outerRadius"},
+                        "endAngle": {"scale": "gaugeScale", "signal": "usedValue"},
+                        "fill": {"value": f"{fill_color}"},
+                    },
+                },
+            },
+            {
+                "type": "text",
+                "name": "gaugeValue",
+                "encode": {
+                    "enter": {
+                        "x": {"signal": "centerX"},
+                        "baseline": {"value": "top"},
+                        "align": {"value": "center"},
+                    },
+                    "update": {
+                        "text": {
+                            "signal": "format(mainValue*100/(maxValue - minValue), '.0f') + '%'"
+                            if percentage_mode
+                            else "format(mainValue, '.2f')"
+                        },
+                        "y": {
+                            "signal": "centerY - 14*fontFactor",
+                        },
+                        "fontSize": {"signal": "fontFactor*18"},
+                    },
+                },
+            },
+            {
+                "type": "arc",
+                "from": {"data": "ticks"},
+                "encode": {
+                    "enter": {
+                        "x": {"signal": "centerX"},
+                        "y": {"signal": "centerY"},
+                        "outerRadius": {"signal": "innerRadius-5"},
+                        "innerRadius": {"signal": "innerRadius - 5 -(radiusRef*0.02)"},
+                        "startAngle": {"scale": "tickScale", "field": "value"},
+                        "endAngle": {"scale": "tickScale", "field": "value"},
+                        "stroke": {"signal": "datum.color"},
+                    }
+                },
+            },
+        ]
+
+        for i, color_range in enumerate(
+            sorted(colors_range, key=lambda x: (x["from"], x["to"]))
+        ):
+            start_angle_factor = color_range["from"] / (max_value - min_value)
+            end_angle_factor = color_range["to"] / (max_value - min_value)
+            conf["marks"].append(
+                {
+                    "type": "arc",
+                    "encode": {
+                        "enter": {
+                            "startAngle": {
+                                "signal": f"-3*PI/5 + {start_angle_factor}*2*3*PI/5"
+                            }
+                        },
+                        "update": {
+                            "x": {"signal": "centerX"},
+                            "y": {"signal": "centerY"},
+                            "innerRadius": {"signal": "innerRadius-5"},
+                            "outerRadius": {"signal": "innerRadius"},
+                            "endAngle": {
+                                "signal": f"-3*PI/5 + {end_angle_factor}*2*3*PI/5",
+                            },
+                            "fill": {"value": f"{color_range['color']}"},
+                        },
+                    },
+                },
+            )
+        if show_labels:
+            conf["marks"].append(
+                {
+                    "type": "text",
+                    "name": "legend",
+                    "encode": {
+                        "enter": {
+                            "x": {"signal": "centerX"},
+                            "baseline": {"value": "top"},
+                            "align": {"value": "center"},
+                        },
+                        "update": {
+                            "text": {
+                                "value": state.metric_label(state.metric_aggs()[0])
+                            },
+                            "y": {
+                                "signal": "centerY - 2*14*fontFactor",
+                            },
+                            "fontSize": {"signal": "fontFactor*10"},
+                        },
+                    },
+                },
+            )
+            if sub_text:
+                conf["marks"].append(
+                    {
+                        "type": "text",
+                        "name": "sub_text",
+                        "encode": {
+                            "enter": {
+                                "x": {"signal": "centerX"},
+                                "baseline": {"value": "top"},
+                                "align": {"value": "center"},
+                            },
+                            "update": {
+                                "text": {"value": sub_text},
+                                "y": {
+                                    "signal": "centerY + 6*fontFactor",
+                                },
+                                "fontSize": {"signal": "fontFactor*10"},
+                            },
+                        },
+                    },
+                )
         return conf
 
     def _marks_histogram(self, state, ax):
@@ -611,6 +856,7 @@ class VegaTranslator:
                 },
             }
         )
+
         return ret
 
     def _marks_line(self, state, ax):
