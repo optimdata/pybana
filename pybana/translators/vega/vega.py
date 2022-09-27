@@ -616,10 +616,7 @@ class VegaTranslator:
                 "name": "centerY",
                 "update": "height/2 + height/2*sin(PI/10)/(1-sin(PI/10))",
             },
-            {
-                "name": "outerRadius",
-                "update": "radiusRef",
-            },
+            {"name": "outerRadius", "update": "radiusRef"},
             {"name": "radiusRef", "update": "min(centerX, centerY)"},
             {"name": "innerRadius", "update": "outerRadius - outerRadius * 0.2"},
             {
@@ -726,9 +723,7 @@ class VegaTranslator:
                             if percentage_mode
                             else f"'{formatted_value}'"
                         },
-                        "y": {
-                            "signal": "centerY - 14*fontFactor",
-                        },
+                        "y": {"signal": "centerY - 14*fontFactor"},
                         "fontSize": {"signal": "fontFactor*18"},
                     },
                 },
@@ -770,12 +765,12 @@ class VegaTranslator:
                             "innerRadius": {"signal": "innerRadius-5"},
                             "outerRadius": {"signal": "innerRadius"},
                             "endAngle": {
-                                "signal": f"-3*PI/5 + {end_angle_factor}*2*3*PI/5",
+                                "signal": f"-3*PI/5 + {end_angle_factor}*2*3*PI/5"
                             },
                             "fill": {"value": f"{color_range['color']}"},
                         },
                     },
-                },
+                }
             )
         if show_labels:
             conf["marks"].append(
@@ -790,13 +785,11 @@ class VegaTranslator:
                         },
                         "update": {
                             "text": {"value": state.metric_label(gauge_metric)},
-                            "y": {
-                                "signal": "centerY - 2*14*fontFactor",
-                            },
+                            "y": {"signal": "centerY - 2*14*fontFactor"},
                             "fontSize": {"signal": "fontFactor*10"},
                         },
                     },
-                },
+                }
             )
             if sub_text:
                 conf["marks"].append(
@@ -811,13 +804,11 @@ class VegaTranslator:
                             },
                             "update": {
                                 "text": {"value": sub_text},
-                                "y": {
-                                    "signal": "centerY + 6*fontFactor",
-                                },
+                                "y": {"signal": "centerY + 6*fontFactor"},
                                 "fontSize": {"signal": "fontFactor*10"},
                             },
                         },
-                    },
+                    }
                 )
         return conf
 
