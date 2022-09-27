@@ -131,7 +131,7 @@ class DatasweetTransformer(ast.NodeTransformer):
 
 
 def datasweet_eval(expr, bucket):
-    fixed_expr = re.sub(r"if\(([^)]*)\)", r"_if(\1)", expr)
+    fixed_expr = re.sub(r"([^\w_]*)if\(", r"\1_if(", expr)
     tree = ast.parse(fixed_expr, mode="eval")
     tree = DatasweetTransformer().visit(tree)
     scope = {}

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import hjson
+import pynumeral
 
 from pybana.helpers import format_timestamp, get_scaled_date_format, percentage
 from pybana.translators.elastic.buckets import (
@@ -12,6 +13,7 @@ from .constants import (
     KIBANA_SEED_COLORS,
     DEFAULT_WIDTH,
     DEFAULT_PIE_WIDTH,
+    DEFAULT_GAUGE_WIDTH,
     DEFAULT_HEIGHT,
     DEFAULT_PADDING,
 )
@@ -27,15 +29,17 @@ class VegaTranslator:
         return {
             "$schema": "https://vega.github.io/schema/vega/v5.json",
             "width": DEFAULT_PIE_WIDTH
-            if state.type() in ["pie", "gauge"]
+            if state.type() == "pie"
+            else DEFAULT_GAUGE_WIDTH
+            if state.type() in ["gauge", "goal"]
             else DEFAULT_WIDTH,
             "height": DEFAULT_HEIGHT,
             "padding": DEFAULT_PADDING,
         }
 
     def data(self, conf, state, response, scope):
-        if state.type() in ["pie", "gauge"]:
-            conf = self.data_single_metric(conf, state, response)
+        if state.type() == "pie":
+            conf = self.data_pie(conf, state, response)
         else:
             conf = self.data_line_bar(conf, state, response, scope)
         return conf
@@ -52,7 +56,7 @@ class VegaTranslator:
     def _format_duration(self, duration):
         return f"{(duration // 3600):.0f}:{(duration % 3600) // 60:.0f}:{duration % 3600 % 60:.0f}"
 
-    def data_single_metric(self, conf, state, response):
+    def data_pie(self, conf, state, response):
         conf["data"] = [{"name": "table", "values": []}]
         if state.type() == "pie":
             conf["data"][0]["transform"] = ([{"type": "pie", "field": "y"}],)
@@ -149,10 +153,14 @@ class VegaTranslator:
                 map(str, filter(bool, point.setdefault("groups", [])))
             )
             for m, metric_agg in enumerate(state.metric_aggs()):
-                if metric_agg.get("hidden"):
-                    continue
                 metric = VEGA_METRICS[metric_agg["type"]]()
-                y = metric.contribute(metric_agg, node, response)
+                try:
+                    y = metric.contribute(metric_agg, node, response)
+                except Exception as e:
+                    if metric_agg.get("hidden"):
+                        continue
+                    else:
+                        raise e
                 if y is None:
                     continue
                 childpoint = point.copy()
@@ -169,7 +177,7 @@ class VegaTranslator:
                         {state.y(ax): y, "axis": series_params["valueAxis"]}
                     )
                 tooltip = {
-                    childpoint["x_label"]: childpoint["x"],
+                    childpoint.get("x_label", "x"): childpoint["x"],
                     childpoint["metric"]: self._format_duration(y)
                     if self._is_duration_bucket(state, metric_agg, metric)
                     else y,
@@ -294,7 +302,7 @@ class VegaTranslator:
         }
 
     def _scales_metric(self, state, conf):
-        if state.type() in ["pie", "gauge"]:
+        if state.type() in ["pie", "gauge", "goal"]:
             return
         scheme = []
         domain = []
@@ -438,7 +446,8 @@ class VegaTranslator:
     def legends(self, conf, state):
         if state.type() == "pie":
             conf = self.legends_pie(conf, state)
-        elif state.type() == "gauge":
+        elif state.type() in ["gauge", "goal"]:
+            # TODO
             pass
         else:
             conf = self.legends_line_bar(conf, state)
@@ -484,7 +493,7 @@ class VegaTranslator:
     def marks(self, conf, state, response):
         if state.type() == "pie":
             conf = self.marks_pie(conf, state, response)
-        elif state.type() == "gauge":
+        elif state.type() in ["gauge", "goal"]:
             conf = self.marks_gauge(conf, state, response)
         else:
             conf = self.marks_bar(conf, state, response)
@@ -546,6 +555,16 @@ class VegaTranslator:
         return conf
 
     def marks_gauge(self, conf, state, response):
+        gauge_metric = None
+        gauge_metric_index = None
+        for i, metric in enumerate(state.metric_aggs()):
+            # We only draw gauge for the first non-hidden metric
+            if not metric.get("hidden"):
+                gauge_metric = metric
+                gauge_metric_index = i
+                break
+        else:
+            return conf
         colors_range = sorted(
             state._state["params"]["gauge"]["colorsRange"],
             key=lambda x: (x["from"], x["to"]),
@@ -554,6 +573,7 @@ class VegaTranslator:
         invert_colors = state._state["params"]["gauge"].get("invertColors", False)
         show_labels = state._state["params"]["gauge"]["labels"]["show"]
         sub_text = state._state["params"]["gauge"]["style"].get("subText", None)
+
         for i, color_range in enumerate(colors_range):
             # Set up range colors
             range_color = color_range.get(
@@ -566,7 +586,10 @@ class VegaTranslator:
 
         max_value = max(r["to"] for r in colors_range)
         min_value = min(r["from"] for r in colors_range)
-        main_value = conf["data"][0]["values"][0].get("y")
+        main_value = conf["data"][0]["values"][gauge_metric_index].get("y")
+        formatted_value = pynumeral.format(
+            main_value, gauge_metric.get("params", {}).get("numeralFormat", ".2f")
+        )
         percentage_mode = state._state["params"]["gauge"].get("percentageMode", False)
 
         def get_color(value):
@@ -578,6 +601,7 @@ class VegaTranslator:
                     break
             return color
 
+        is_gauge = state._state["type"] == "gauge"
         fill_color = get_color(main_value)
         ticks = []
         tick_step = (max_value - min_value) / 10
@@ -590,7 +614,7 @@ class VegaTranslator:
             {"name": "centerX", "update": "width/2"},
             {
                 "name": "centerY",
-                "update": "height/2 + height/2*sin(PI/10)/(1-sin(PI/10)))",
+                "update": "height/2 + height/2*sin(PI/10)/(1-sin(PI/10))",
             },
             {
                 "name": "outerRadius",
@@ -598,6 +622,14 @@ class VegaTranslator:
             },
             {"name": "radiusRef", "update": "min(centerX, centerY)"},
             {"name": "innerRadius", "update": "outerRadius - outerRadius * 0.2"},
+            {
+                "name": "outerBackgroundRadius",
+                "update": f"{'outerRadius' if is_gauge else 'outerRadius - outerRadius * 0.05'}",
+            },
+            {
+                "name": "innerBackgroundRadius",
+                "update": f"{'innerRadius' if is_gauge else 'outerRadius - outerRadius*0.15'}",
+            },
             {"name": "maxValue", "update": f"{max_value}"},
             {"name": "minValue", "update": f"{min_value}"},
             {"name": "mainValue", "update": f"{main_value}"},
@@ -650,16 +682,18 @@ class VegaTranslator:
         conf["marks"] = [
             {
                 "type": "arc",
-                "name": "gauge",
+                "name": "gaugeBackground",
                 "encode": {
                     "enter": {
                         "x": {"signal": "centerX"},
                         "y": {"signal": "centerY"},
                         "startAngle": {"signal": "-3*PI/5"},
                         "endAngle": {"signal": "3*PI/5"},
-                        "outerRadius": {"signal": "outerRadius"},
-                        "innerRadius": {"signal": "innerRadius"},
-                        "fill": {"value": "rgb(235,235,235)"},
+                        "outerRadius": {"signal": "outerBackgroundRadius"},
+                        "innerRadius": {"signal": "innerBackgroundRadius"},
+                        "fill": {
+                            "value": f"{'rgb(235,235,235)' if is_gauge else 'rgb(0,0,0)'}"
+                        },
                     }
                 },
             },
@@ -690,7 +724,7 @@ class VegaTranslator:
                         "text": {
                             "signal": "format(mainValue*100/(maxValue - minValue), '.0f') + '%'"
                             if percentage_mode
-                            else "format(mainValue, '.2f')"
+                            else f"'{formatted_value}'"
                         },
                         "y": {
                             "signal": "centerY - 14*fontFactor",
@@ -755,9 +789,7 @@ class VegaTranslator:
                             "align": {"value": "center"},
                         },
                         "update": {
-                            "text": {
-                                "value": state.metric_label(state.metric_aggs()[0])
-                            },
+                            "text": {"value": state.metric_label(gauge_metric)},
                             "y": {
                                 "signal": "centerY - 2*14*fontFactor",
                             },
