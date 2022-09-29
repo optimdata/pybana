@@ -8,27 +8,21 @@ __all__ = ("VEGA_METRICS",)
 
 
 class BaseMetric:
-    def _contribute(self, agg, bucket, response):
-        return (bucket or response["aggregations"])[agg["id"]]["value"]
-
     def contribute(self, agg, bucket, response):
-        ret = self._contribute(agg, bucket, response)
-        if isinstance(bucket, dict):
-            bucket[agg["id"]] = {
-                "value": None if isinstance(ret, float) and math.isnan(ret) else ret
-            }
-        return ret
+        return (bucket or response["aggregations"])[agg["id"]]["value"]
 
 
 class CountMetric(BaseMetric):
     aggtype = "count"
 
-    def _contribute(self, agg, bucket, response):
-        return (
+    def contribute(self, agg, bucket, response):
+        ret = (
             bucket["doc_count"]
             if bucket and "doc_count" in bucket
             else response["hits"]["total"]
         )
+        bucket[agg["id"]] = {"value": ret}
+        return ret
 
 
 class AverageMetric(BaseMetric):
@@ -38,14 +32,14 @@ class AverageMetric(BaseMetric):
 class MedianMetric(BaseMetric):
     aggtype = "median"
 
-    def _contribute(self, agg, bucket, response):
+    def contribute(self, agg, bucket, response):
         return (bucket or response["aggregations"])[agg["id"]]["values"]["50.0"]
 
 
 class StdDevMetric(BaseMetric):
     aggtype = "std_dev"
 
-    def _contribute(self, agg, bucket, response):
+    def contribute(self, agg, bucket, response):
         return (bucket or response["aggregations"])[agg["id"]]["std_deviation"]
 
 
@@ -68,8 +62,12 @@ class CardinalityMetric(BaseMetric):
 class DatasweetMetric(BaseMetric):
     aggtype = "datasweet_formula"
 
-    def _contribute(self, agg, bucket, response):
-        return datasweet_eval(agg["params"]["formula"], bucket)
+    def contribute(self, agg, bucket, response):
+        ret = datasweet_eval(agg["params"]["formula"], bucket)
+        bucket[agg["id"]] = {
+            "value": None if isinstance(ret, float) and math.isnan(ret) else ret
+        }
+        return ret
 
 
 class TopHitsMetric(BaseMetric):
@@ -83,7 +81,7 @@ class TopHitsMetric(BaseMetric):
 
     aggtype = "top_hits"
 
-    def _contribute(self, agg, bucket, response):
+    def contribute(self, agg, bucket, response):
         def flatten(value):
             if isinstance(value, (list, esl.AttrList)):
                 for item in value:

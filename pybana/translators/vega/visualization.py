@@ -91,8 +91,14 @@ class ContextVisualization:
                 return "Sum of %(field)s" % agg["params"]
             elif agg["type"] == "cardinality":
                 return "Unique count of %(field)s" % agg["params"]
+            elif agg["type"] == "avg":
+                return "Average of %(field)s" % agg["params"]
+            elif agg["type"] == "max":
+                return "Maximum of %(field)s" % agg["params"]
+            elif agg["type"] == "min":
+                return "Minimum of %(field)s" % agg["params"]
             raise NotImplementedError(
-                "%(type)s for pie chart is not implemented" % agg
+                "%s for %s is not implemented" % (agg["type"], self.type())
             )  # pragma: no cover
         elif self.type() in ("table", "metric"):
             if agg["type"] == "count":
