@@ -158,6 +158,7 @@ class VegaTranslator:
                     y = metric.contribute(metric_agg, node, response)
                 except Exception as e:
                     if metric_agg.get("hidden"):
+                        # Ignore errors when the value is not displayed
                         y = None
                         node[metric_agg["id"]] = {"value": None}
                     else:
