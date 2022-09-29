@@ -751,7 +751,7 @@ class VegaTranslator:
                             "stroke": {"signal": "datum.color"},
                         }
                     },
-                },
+                }
             )
             for i, color_range in enumerate(
                 sorted(colors_range, key=lambda x: (x["from"], x["to"]))
