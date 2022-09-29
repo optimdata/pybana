@@ -593,6 +593,7 @@ class VegaTranslator:
             main_value, gauge_metric.get("params", {}).get("numeralFormat", ".2f")
         )
         percentage_mode = state._state["params"]["gauge"].get("percentageMode", False)
+        show_scale = state._state["params"]["gauge"].get("scale", {}).get("show", False)
 
         def get_color(value):
             color = "black"
@@ -730,50 +731,55 @@ class VegaTranslator:
                     },
                 },
             },
-            {
-                "type": "arc",
-                "from": {"data": "ticks"},
-                "encode": {
-                    "enter": {
-                        "x": {"signal": "centerX"},
-                        "y": {"signal": "centerY"},
-                        "outerRadius": {"signal": "innerRadius-5"},
-                        "innerRadius": {"signal": "innerRadius - 5 -(radiusRef*0.02)"},
-                        "startAngle": {"scale": "tickScale", "field": "value"},
-                        "endAngle": {"scale": "tickScale", "field": "value"},
-                        "stroke": {"signal": "datum.color"},
-                    }
-                },
-            },
         ]
 
-        for i, color_range in enumerate(
-            sorted(colors_range, key=lambda x: (x["from"], x["to"]))
-        ):
-            start_angle_factor = color_range["from"] / (max_value - min_value)
-            end_angle_factor = color_range["to"] / (max_value - min_value)
+        if show_scale:
             conf["marks"].append(
                 {
                     "type": "arc",
+                    "from": {"data": "ticks"},
                     "encode": {
                         "enter": {
-                            "startAngle": {
-                                "signal": f"-3*PI/5 + {start_angle_factor}*2*3*PI/5"
-                            }
-                        },
-                        "update": {
                             "x": {"signal": "centerX"},
                             "y": {"signal": "centerY"},
-                            "innerRadius": {"signal": "innerRadius-5"},
-                            "outerRadius": {"signal": "innerRadius"},
-                            "endAngle": {
-                                "signal": f"-3*PI/5 + {end_angle_factor}*2*3*PI/5"
+                            "outerRadius": {"signal": "innerRadius-5"},
+                            "innerRadius": {
+                                "signal": "innerRadius - 5 -(radiusRef*0.02)"
                             },
-                            "fill": {"value": f"{color_range['color']}"},
-                        },
+                            "startAngle": {"scale": "tickScale", "field": "value"},
+                            "endAngle": {"scale": "tickScale", "field": "value"},
+                            "stroke": {"signal": "datum.color"},
+                        }
                     },
-                }
+                },
             )
+            for i, color_range in enumerate(
+                sorted(colors_range, key=lambda x: (x["from"], x["to"]))
+            ):
+                start_angle_factor = color_range["from"] / (max_value - min_value)
+                end_angle_factor = color_range["to"] / (max_value - min_value)
+                conf["marks"].append(
+                    {
+                        "type": "arc",
+                        "encode": {
+                            "enter": {
+                                "startAngle": {
+                                    "signal": f"-3*PI/5 + {start_angle_factor}*2*3*PI/5"
+                                }
+                            },
+                            "update": {
+                                "x": {"signal": "centerX"},
+                                "y": {"signal": "centerY"},
+                                "innerRadius": {"signal": "innerRadius-5"},
+                                "outerRadius": {"signal": "innerRadius"},
+                                "endAngle": {
+                                    "signal": f"-3*PI/5 + {end_angle_factor}*2*3*PI/5"
+                                },
+                                "fill": {"value": f"{color_range['color']}"},
+                            },
+                        },
+                    }
+                )
         if show_labels:
             conf["marks"].append(
                 {
