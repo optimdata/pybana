@@ -581,7 +581,7 @@ class VegaTranslator:
             range_color = color_range.get(
                 "color",
                 get_interval_color(
-                    color_schema_name, i, len(colors_range) - 1, invert_colors
+                    color_schema_name, i, max(len(colors_range) - 1, 1), invert_colors
                 ),
             )
             color_range["color"] = range_color
