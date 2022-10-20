@@ -57,10 +57,14 @@ class VegaTranslator:
         return f"{(duration // 3600):.0f}:{(duration % 3600) // 60:.0f}:{duration % 3600 % 60:.0f}"
 
     def data_pie(self, conf, state, response):
-        conf["data"] = [{"name": "table", "values": []}]
-        if state.type() == "pie":
-            conf["data"][0]["transform"] = ([{"type": "pie", "field": "y"}],)
-        # In case of a pie or gauge, there is only one metric agg
+        conf["data"] = [
+            {
+                "name": "table",
+                "values": [],
+                "transform": [{"type": "pie", "field": "y"}],
+            }
+        ]
+        # In case of a pie, there is only one metric agg
         metric_agg = state.metric_aggs()[0]
         metric = VEGA_METRICS[metric_agg["type"]]()
         if state.singleton():
