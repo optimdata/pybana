@@ -2,6 +2,8 @@
 
 import json
 
+from .utils import get_field_arg
+
 """
 Provide translators which translate metric aggregations defined using kibana syntax to elasticsearch syntax.
 
@@ -12,105 +14,101 @@ Not supported:
 
 
 class BaseMetric:
-    def params(self, agg):
+    def params(self, agg, field):
         return json.loads(agg["params"].get("json") or "{}")
 
-    def translate(self, proxy, agg, state):
-        proxy.metric(agg["id"], agg["type"], **self.params(agg))
+    def translate(self, proxy, agg, state, field):
+        proxy.metric(agg["id"], agg["type"], **self.params(agg, field))
 
 
 class AvgMetric(BaseMetric):
     aggtype = "avg"
 
-    def params(self, agg):
-        return {"field": agg["params"]["field"], **super().params(agg)}
+    def params(self, agg, field):
+        return {**get_field_arg(agg, field), **super().params(agg, field)}
 
 
 class CardinalityMetric(BaseMetric):
     aggtype = "cardinality"
 
-    def params(self, agg):
-        return {"field": agg["params"]["field"], **super().params(agg)}
+    def params(self, agg, field):
+        return {**get_field_arg(agg, field), **super().params(agg, field)}
 
 
 class CountMetric(BaseMetric):
     aggtype = "count"
 
-    def translate(self, proxy, agg, state):
+    def translate(self, proxy, agg, state, field):
         pass
 
 
 class MaxMetric(BaseMetric):
     aggtype = "max"
 
-    def params(self, agg):
-        return {"field": agg["params"]["field"], **super().params(agg)}
+    def params(self, agg, field):
+        return {**get_field_arg(agg, field), **super().params(agg, field)}
 
 
 class MedianMetric(BaseMetric):
     aggtype = "median"
 
-    def params(self, agg):
-        return {
-            "field": agg["params"]["field"],
-            "percents": [50],
-            **super().params(agg),
-        }
+    def params(self, agg, field):
+        return {"percents": [50], **get_field_arg(agg, field), **super().params(agg, field)}
 
-    def translate(self, proxy, agg, state):
-        proxy.metric(agg["id"], "percentiles", **self.params(agg))
+    def translate(self, proxy, agg, state, field):
+        proxy.metric(agg["id"], "percentiles", **self.params(agg, field))
 
 
 class MinMetric(BaseMetric):
     aggtype = "min"
 
-    def params(self, agg):
-        return {"field": agg["params"]["field"], **super().params(agg)}
+    def params(self, agg, field):
+        return {**get_field_arg(agg, field), **super().params(agg, field)}
 
 
 class PercentilesMetric(BaseMetric):
     aggtype = "percentiles"
 
-    def params(self, agg):
+    def params(self, agg, field):
         return {
-            "field": agg["params"]["field"],
             "percents": agg["params"]["percents"],
-            **super().params(agg),
+            **get_field_arg(agg, field),
+            **super().params(agg, field),
         }
 
 
 class PercentileRanksMetric(BaseMetric):
     aggtype = "percentile_ranks"
 
-    def params(self, agg):
+    def params(self, agg, field):
         return {
-            "field": agg["params"]["field"],
             "values": agg["params"]["values"],
-            **super().params(agg),
+            **get_field_arg(agg, field),
+            **super().params(agg, field),
         }
 
 
 class StdDevMetric(BaseMetric):
     aggtype = "std_dev"
 
-    def params(self, agg):
-        return {"field": agg["params"]["field"], **super().params(agg)}
+    def params(self, agg, field):
+        return {**get_field_arg(agg, field), **super().params(agg, field)}
 
-    def translate(self, proxy, agg, state):
-        proxy.metric(agg["id"], "extended_stats", **self.params(agg))
+    def translate(self, proxy, agg, state, field):
+        proxy.metric(agg["id"], "extended_stats", **self.params(agg, field))
 
 
 class SumMetric(BaseMetric):
     aggtype = "sum"
 
-    def params(self, agg):
-        return {"field": agg["params"]["field"], **super().params(agg)}
+    def params(self, agg, field):
+        return {**get_field_arg(agg, field), **super().params(agg, field)}
 
 
 class DatasweetMetric(BaseMetric):
     aggtype = "datasweet_formula"
 
-    def translate(self, proxy, agg, state):
+    def translate(self, proxy, agg, state, field):
         pass
 
 
@@ -125,14 +123,14 @@ class TopHitsMetric(BaseMetric):
 
     aggtype = "top_hits"
 
-    def translate(self, proxy, agg, state):
+    def translate(self, proxy, agg, state, field):
         params = agg["params"]
         proxy.metric(
             agg["id"],
             "top_hits",
             sort={params["sortField"]: {"order": params["sortOrder"]}},
             size=params["size"],
-            _source=params["field"],
+            _source=agg["params"]["field"],
         )
 
 
@@ -156,5 +154,5 @@ TRANSLATORS = {
 
 
 class MetricTranslator:
-    def translate(self, proxy, agg, state):
-        TRANSLATORS[agg["type"]]().translate(proxy, agg, state)
+    def translate(self, proxy, agg, state, field):
+        TRANSLATORS[agg["type"]]().translate(proxy, agg, state, field)
