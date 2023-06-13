@@ -4,6 +4,7 @@ from datetime import timedelta
 import json
 
 from .metrics import MetricTranslator
+from .utils import get_field_arg
 
 """
 Provide translators which translate bucket aggregations defined using kibana syntax to elasticsearch syntax.
@@ -81,42 +82,45 @@ def format_from_interval(interval):
 
 
 class BaseBucket:
-    def translate(self, agg, state, context):
-        return json.loads(agg["params"].get("json") or "{}")
+    def translate(self, agg, state, context, field):
+        ret = json.loads(agg["params"].get("json") or "{}")
+        if field.get("scripted"):
+            ret["valueType"] = field["type"]
+        return ret
 
 
 class DateHistogramBucket(BaseBucket):
     aggtype = "date_histogram"
 
-    def translate(self, agg, state, context):
+    def translate(self, agg, state, context, field):
         interval = compute_auto_interval(
             agg["params"]["interval"], context.beg, context.end
         )
 
         return {
-            "field": agg["params"]["field"],
             "interval": interval,
             "time_zone": str(context.tzinfo),
             "format": format_from_interval(interval),
-            **super().translate(agg, state, context),
+            **get_field_arg(agg, field)
+            ** super().translate(agg, state, context, field),
         }
 
 
 class DateRangeBucket(BaseBucket):
     aggtype = "date_range"
 
-    def translate(self, agg, state, context):
+    def translate(self, agg, state, context, field):
         return {
-            "field": agg["params"]["field"],
             "ranges": agg["params"]["ranges"],
-            **super().translate(agg, state, context),
+            **get_field_arg(agg, field)
+            ** super().translate(agg, state, context, field),
         }
 
 
 class FiltersBucket(BaseBucket):
     aggtype = "filters"
 
-    def translate(self, agg, state, context):
+    def translate(self, agg, state, context, field):
         filters = {}
         for fltr in agg["params"]["filters"]:
             label = fltr.get("label") or fltr["input"]["query"] or "*"
@@ -131,35 +135,35 @@ class FiltersBucket(BaseBucket):
                 if fltr["input"]["query"]
                 else {"match_all": {}}
             )
-        return {"filters": filters, **super().translate(agg, state, context)}
+        return {"filters": filters, **super().translate(agg, state, context, field)}
 
 
 class HistogramBucket(BaseBucket):
     aggtype = "histogram"
 
-    def translate(self, agg, state, context):
+    def translate(self, agg, state, context, field):
         return {
-            "field": agg["params"]["field"],
             "interval": agg["params"]["interval"],
-            **super().translate(agg, state, context),
+            **get_field_arg(agg, field),
+            **super().translate(agg, state, context, field),
         }
 
 
 class RangeBucket(BaseBucket):
     aggtype = "range"
 
-    def translate(self, agg, state, context):
+    def translate(self, agg, state, context, field):
         return {
-            "field": agg["params"]["field"],
             "ranges": agg["params"]["ranges"],
-            **super().translate(agg, state, context),
+            **get_field_arg(agg, field),
+            **super().translate(agg, state, context, field),
         }
 
 
 class TermsBucket(BaseBucket):
     aggtype = "terms"
 
-    def translate(self, agg, state, context):
+    def translate(self, agg, state, context, field):
         orderby = agg["params"]["orderBy"]
         aggs = {agg["id"]: agg for agg in state["aggs"]}
         if orderby in aggs and aggs[orderby]["type"] == "count":
@@ -167,10 +171,10 @@ class TermsBucket(BaseBucket):
         if orderby == "custom":
             orderby = agg["params"]["orderAgg"]["id"]
         return {
-            "field": agg["params"]["field"],
             "size": agg["params"]["size"],
             "order": {orderby: agg["params"]["order"]},
-            **super().translate(agg, state, context),
+            **get_field_arg(agg, field),
+            **super().translate(agg, state, context, field),
         }
 
 
@@ -188,15 +192,17 @@ TRANSLATORS = {
 
 
 class BucketTranslator:
-    def translate(self, proxy, agg, state, context):
+    def translate(self, proxy, agg, state, context, fields):
+        field = fields.get(agg.get("params", {}).get("field"))
         ret = proxy.bucket(
             agg["id"],
             agg["type"],
-            **TRANSLATORS[agg["type"]]().translate(agg, state, context),
+            **TRANSLATORS[agg["type"]]().translate(agg, state, context, field),
         )
         for metric_agg in state["aggs"]:
             if metric_agg["id"] == agg["params"].get("orderBy"):
-                MetricTranslator().translate(ret, metric_agg, state)
+                field = fields.get(metric_agg.get("params", {}).get("field"))
+                MetricTranslator().translate(ret, metric_agg, state, field)
         if "orderAgg" in agg["params"]:
             order_agg = agg["params"]["orderAgg"]
             ret.bucket(order_agg["id"], order_agg["type"], **order_agg["params"])

@@ -73,6 +73,10 @@ class ElasticTranslator:
 
     def translate_legacy(self, visualization, scope):
         index_pattern = visualization.index()
+        fields = {
+            field["name"]: field
+            for field in json.loads(index_pattern["index-pattern"]["fields"])
+        }
         index = index_pattern["index-pattern"]["title"]
         ts = index_pattern["index-pattern"]["timeFieldName"]
         search = elasticsearch_dsl.Search(index=index).filter(
@@ -88,9 +92,10 @@ class ElasticTranslator:
         metric_aggs = [agg for agg in state["aggs"] if agg["schema"] in ("metric",)]
         proxy = search.aggs
         for agg in segment_aggs:
-            proxy = BucketTranslator().translate(proxy, agg, state, scope)
+            proxy = BucketTranslator().translate(proxy, agg, state, scope, fields)
         for agg in metric_aggs:
-            MetricTranslator().translate(proxy, agg, state)
+            field = fields.get(agg.get("field"))
+            MetricTranslator().translate(proxy, agg, state, field)
         search = search[:0]
         search = search.filter(visualization.filters())
         return search

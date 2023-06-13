@@ -39,3 +39,13 @@ for name, method in inspect.getmembers(
 ):
     if not name.startswith("__"):
         setattr(SearchListProxy, name, get_proxy_method(name))
+
+
+def get_field_arg(agg, field):
+    if not field:
+        return {"field": agg["params"]["field"]}
+    return (
+        {"field": field["name"]}
+        if not field.get("scripted")
+        else {"script": {"source": field["script"], "lang": field["lang"]}}
+    )
