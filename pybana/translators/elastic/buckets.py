@@ -101,8 +101,8 @@ class DateHistogramBucket(BaseBucket):
             "interval": interval,
             "time_zone": str(context.tzinfo),
             "format": format_from_interval(interval),
-            **get_field_arg(agg, field)
-            ** super().translate(agg, state, context, field),
+            **get_field_arg(agg, field),
+            **super().translate(agg, state, context, field),
         }
 
 
@@ -112,8 +112,8 @@ class DateRangeBucket(BaseBucket):
     def translate(self, agg, state, context, field):
         return {
             "ranges": agg["params"]["ranges"],
-            **get_field_arg(agg, field)
-            ** super().translate(agg, state, context, field),
+            **get_field_arg(agg, field),
+            **super().translate(agg, state, context, field),
         }
 
 
