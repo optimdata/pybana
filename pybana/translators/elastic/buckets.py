@@ -84,7 +84,7 @@ def format_from_interval(interval):
 class BaseBucket:
     def translate(self, agg, state, context, field):
         ret = json.loads(agg["params"].get("json") or "{}")
-        if field.get("scripted"):
+        if field and field.get("scripted"):
             ret["valueType"] = field["type"]
         return ret
 

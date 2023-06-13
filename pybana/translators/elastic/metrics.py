@@ -53,7 +53,7 @@ class MedianMetric(BaseMetric):
     aggtype = "median"
 
     def params(self, agg, field):
-        return {"percents": [50], **get_field_arg(agg, field), **super().params(agg)}
+        return {"percents": [50], **get_field_arg(agg, field), **super().params(agg, field)}
 
     def translate(self, proxy, agg, state, field):
         proxy.metric(agg["id"], "percentiles", **self.params(agg, field))
@@ -84,7 +84,7 @@ class PercentileRanksMetric(BaseMetric):
         return {
             "values": agg["params"]["values"],
             **get_field_arg(agg, field),
-            **super().params(agg),
+            **super().params(agg, field),
         }
 
 
