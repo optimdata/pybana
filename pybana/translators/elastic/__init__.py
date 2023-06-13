@@ -94,7 +94,7 @@ class ElasticTranslator:
         for agg in segment_aggs:
             proxy = BucketTranslator().translate(proxy, agg, state, scope, fields)
         for agg in metric_aggs:
-            field = fields.get(agg.get("field"))
+            field = fields.get(agg.get("params", {}).get("field"))
             MetricTranslator().translate(proxy, agg, state, field)
         search = search[:0]
         search = search.filter(visualization.filters())
