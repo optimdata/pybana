@@ -136,16 +136,23 @@ def datasweet_eval(expr, bucket):
     tree = DatasweetTransformer().visit(tree)
     scope = {}
     for key, value in bucket.items():
-        # TODO. Ugly. fix this.
-        # count agg are not supported here
         if key.isdigit():
-            val = (
+            if "hits" in value:
+                hits = value["hits"].get("hits", [])
+                if len(hits) > 0 and "_source" in value["hits"]["hits"][0]:
+                    val = value["hits"]["hits"][0]["_source"].values()[0]
+                else:
+                    val = None
+            else:
+                # TODO. Ugly. fix this.
+                # count agg are not supported here
+                val = (
                 value["std_deviation"]
                 if "std_deviation" in value
                 else value["values"]["50.0"]
                 if "values" in value
                 else value["value"]
-            )
+                )
             scope[f"agg{key}"] = float("nan") if val is None else val
     try:
         return eval(compile(tree, "a", mode="eval"), FUNCS, scope)
