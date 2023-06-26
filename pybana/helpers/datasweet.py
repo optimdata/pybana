@@ -147,11 +147,11 @@ def datasweet_eval(expr, bucket):
                 # TODO. Ugly. fix this.
                 # count agg are not supported here
                 val = (
-                value["std_deviation"]
-                if "std_deviation" in value
-                else value["values"]["50.0"]
-                if "values" in value
-                else value["value"]
+                    value["std_deviation"]
+                    if "std_deviation" in value
+                    else value["values"]["50.0"]
+                    if "values" in value
+                    else value["value"]
                 )
             scope[f"agg{key}"] = float("nan") if val is None else val
     try:
