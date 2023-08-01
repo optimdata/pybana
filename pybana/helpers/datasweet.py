@@ -140,7 +140,7 @@ def datasweet_eval(expr, bucket):
             if "hits" in value:
                 hits = value["hits"].get("hits", [])
                 if len(hits) > 0 and "_source" in value["hits"]["hits"][0]:
-                    val = value["hits"]["hits"][0]["_source"].values()[0]
+                    val = list(value["hits"]["hits"][0]["_source"].values())[0]
                 else:
                     val = None
             else:
