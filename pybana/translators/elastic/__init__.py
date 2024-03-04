@@ -43,10 +43,26 @@ class ElasticTranslator:
                 return ret
             return node
 
+        def add_time_zone(node):
+            if isinstance(node, list):
+                return [add_time_zone(child) for child in node]
+            elif isinstance(node, dict):
+                ret = {}
+                for key, val in node.items():
+                    if key == "date_histogram" and "time_zone" not in val:
+                        new_val = add_time_zone(val)
+                        new_val["time_zone"] = str(scope.tzinfo)
+                        ret[key] = new_val
+                    else:
+                        ret[key] = add_time_zone(val)
+                return ret
+            return node
+
         def translate_data_item(data):
             if "url" in data:
                 index = data["url"]["index"]
                 body = replace_magic_keywords(data["url"]["body"])
+                body = add_time_zone(body)
                 search = elasticsearch_dsl.Search(index=index).update_from_dict(body)
                 if data["url"].get("%timefield%"):
                     ts = data["url"]["%timefield%"]
