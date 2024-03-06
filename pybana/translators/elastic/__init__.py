@@ -49,7 +49,7 @@ class ElasticTranslator:
             elif isinstance(node, dict):
                 ret = {}
                 for key, val in node.items():
-                    if key == "date_histogram" and "time_zone" not in val:
+                    if key in ["date_histogram", "auto_date_histogram"] and "time_zone" not in val:
                         new_val = add_time_zone(val)
                         new_val["time_zone"] = str(scope.tzinfo)
                         ret[key] = new_val
