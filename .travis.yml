@@ -12,6 +12,7 @@ before_install:
 
 script:
   - while ! nc -z 127.0.0.1 9200; do sleep 1; done;
+  # - npm i vega@5.25.0
   - pip install --upgrade pip
   - pip install -r requirements.txt
   - pip install -r requirements-dev.txt

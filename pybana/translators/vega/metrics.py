@@ -21,7 +21,8 @@ class CountMetric(BaseMetric):
             if bucket and "doc_count" in bucket
             else response["hits"]["total"]
         )
-        bucket[agg["id"]] = {"value": ret}
+        if bucket is not None:
+            bucket[agg["id"]] = {"value": ret}
         return ret
 
 
