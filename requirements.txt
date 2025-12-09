@@ -3,3 +3,4 @@ elasticsearch-dsl==6.4.0
 hjson==3.0.1
 pendulum==2.1.2
 pytz>=2019.1
+pynumeral==0.1.2
