@@ -7,7 +7,6 @@ services:
   - docker
 
 before_install:
-  - if [[ "$TRAVIS_PULL_REQUEST_BRANCH" ]]; then git diff --quiet HEAD master -- ./piudash && travis_terminate 0 || echo "Python code has changed, launching tests...";fi
   - sudo docker network create elastic8
   - >
     sudo docker run -d --name elasticsearch8 --net elastic8 -p 9201:9200 -p 9301:9300 
