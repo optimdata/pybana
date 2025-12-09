@@ -25,13 +25,17 @@ from pybana.translators.elastic.buckets import (
     format_from_interval,
     compute_auto_interval,
 )
+from pybana.elastic.elastic_client import ElasticsearchExtClient
+
 
 PYBANA_INDEX = ".kibana_pybana_test"
-elastic = elasticsearch.Elasticsearch()
-elasticsearch_dsl.connections.add_connection("default", elastic)
+ELASTIC1 = elasticsearch.Elasticsearch()
+ELASTIC = ElasticsearchExtClient()
+elasticsearch_dsl.connections.add_connection("default", ELASTIC1)
 
 
 def load_fixtures(elastic, kibana, index):
+    print(f"load_fixtures({elastic}, {kibana}, {index})")
     for realindex in elastic.indices.get(index, ignore_unavailable=True):
         elastic.indices.delete(realindex)
     datafn = os.path.join(BASE_DIRECTORY, "pybana/index.json")
@@ -46,8 +50,7 @@ def load_fixtures(elastic, kibana, index):
                 action = json.loads(line)
                 action["_index"] = index
                 yield action
-
-    elasticsearch.helpers.bulk(elastic, actions(), refresh="wait_for")
+    elastic.helpers_bulk(actions(), refresh="wait_for")
 
 
 def load_data(elastic, index):
@@ -93,9 +96,9 @@ def load_data(elastic, index):
 
 def test_client():
     kibana = Kibana(PYBANA_INDEX)
-    elastic.indices.delete(f"{PYBANA_INDEX}*")
-    elastic.indices.create(f"{PYBANA_INDEX}_1")
-    load_fixtures(elastic, kibana, PYBANA_INDEX)
+    ELASTIC.indices.delete(f"{PYBANA_INDEX}*")
+    ELASTIC.indices.create(f"{PYBANA_INDEX}_1")
+    load_fixtures(ELASTIC, kibana, PYBANA_INDEX)
     kibana.init_config()
     kibana.init_config()
     assert kibana.config()
@@ -103,6 +106,7 @@ def test_client():
     index_pattern = kibana.index_pattern("6c172f80-fb13-11e9-84e4-078763638bf3")
     index_pattern.fields
     index_pattern.fieldFormatMap
+    kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())
@@ -127,8 +131,8 @@ def test_client():
 
 def test_translators():
     kibana = Kibana(PYBANA_INDEX)
-    load_fixtures(elastic, kibana, PYBANA_INDEX)
-    load_data(elastic, "pybana")
+    load_fixtures(ELASTIC, kibana, PYBANA_INDEX)
+    load_data(ELASTIC, "pybana")
     kibana.init_config()
     translator = ElasticTranslator()
     scope = Scope(
@@ -186,10 +190,10 @@ def test_translators():
                     assert ret == results[agg["id"]]
 
 
-def test_vega_visuzalization():
+def test_vega_visualization():
     kibana = Kibana(PYBANA_INDEX)
-    load_fixtures(elastic, kibana, PYBANA_INDEX)
-    load_data(elastic, "pybana")
+    load_fixtures(ELASTIC, kibana, PYBANA_INDEX)
+    load_data(ELASTIC, "pybana")
     kibana.init_config()
     translator = ElasticTranslator()
     scope = Scope(
@@ -205,8 +209,11 @@ def test_vega_visuzalization():
     for key in keys:
         visualization = kibana.visualization(key)
         search = translator.translate(visualization, scope)
+        search_data = search.to_dict()
+        if isinstance(search_data, list) and len(search_data)==1:
+            search_data=search_data[0]
         assert (
-            search.to_dict()["aggs"]["category"]["date_histogram"]["interval"] == "1h"
+            search_data["aggs"]["category"]["date_histogram"]["interval"] == "1h"
         )
 
         response = search.execute()

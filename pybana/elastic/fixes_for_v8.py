@@ -1,11 +1,9 @@
 import copy
 import logging
 import json
-from typing import Iterator, Dict, List, Any, Optional
+from typing import Iterator, Dict, List, Any, Optional, Tuple, Union
 from elasticsearch.client import Transport
 from elasticsearch.exceptions import TransportError
-
-from pyparsing import Tuple, Union
 
 logger = logging.getLogger("elasticsearch")
 
@@ -218,14 +216,25 @@ class V6ToV8:
         get_sub_dict(template, ["settings", "index"])["codec"] = "best_compression"
         return template
 
+
+    def _remove_type(self, action):
+        if isinstance(action, list):
+            for v in action:
+                self._remove_type(v)
+        elif isinstance(action, dict):
+            if "_type" in action:
+                del action["_type"]
+            for v in action.values():
+                self._remove_type(v)
+
+
     def fix_actions(
         self, origin_actions: Union[Iterator[Dict], List[Dict], None]
     ) -> Iterator[Dict]:
         if not origin_actions:
             return iter([])
         for action in origin_actions:
-            if "_type" in action:
-                del action["_type"]
+            self._remove_type(action)
             yield action
 
     def fix_histogram(self, params: Union[List, Dict]):

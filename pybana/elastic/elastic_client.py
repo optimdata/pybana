@@ -1,4 +1,6 @@
 import logging
+import json
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from elasticsearch import Elasticsearch, helpers
@@ -9,6 +11,7 @@ from elasticsearch.client import (
     CatClient,
     IngestClient,
 )
+from elasticsearch.exceptions import ConflictError
 
 
 from elasticsearch.client.utils import query_params
@@ -38,7 +41,7 @@ class ElasticsearchSubClient:
         return self._parent.version_major
 
 
-class ElasticsearchIndicePollux(ElasticsearchSubClient):
+class ElasticsearchExtIndice(ElasticsearchSubClient):
     def __init__(self, parent: ElasticsearchBaseClient, indices: IndicesClient):
         super().__init__(parent)
         self._indices = indices
@@ -183,7 +186,7 @@ class ElasticsearchIndicePollux(ElasticsearchSubClient):
         )
 
 
-class ElasticsearchCatPollux(ElasticsearchSubClient):
+class ElasticsearchExtCat(ElasticsearchSubClient):
     def __init__(self, parent: ElasticsearchBaseClient, cat: CatClient):
         super().__init__(parent)
         self._cat = cat
@@ -201,7 +204,7 @@ class ElasticsearchCatPollux(ElasticsearchSubClient):
         return self._cat.repositories(**kwargs)
 
 
-class ElasticsearchIngestPollux(ElasticsearchSubClient):
+class ElasticsearchExtIngest(ElasticsearchSubClient):
     def __init__(self, parent: ElasticsearchBaseClient, ingest: IngestClient):
         super().__init__(parent)
         self._ingest = ingest
@@ -275,26 +278,19 @@ class ScrollsCache:
         return len(keys)
 
 
-class ElasticsearchPolluxClient(ElasticsearchBaseClient):
-    def __init__(self, *args, **kwargs):
-        self.es = Elasticsearch(*args, **kwargs)
-        try:
-            info = self.es.info()
-            assert info is not None
-            assert isinstance(info, dict)
-            version = info.get("version", {}).get("number")
-            self.version = version
-        # For dev convenience, run pollux without elasticsearch
-        except Exception as exc:
-            from diagnose.ror import version as ror_version
-
-            logger.warning(exc)
-            self.version = ror_version
+class ElasticsearchExtClient(ElasticsearchBaseClient):
+    def __init__(self, es: Optional[Elasticsearch]=None):
+        self.es = es or Elasticsearch()
+        info = self.es.info()
+        assert info is not None
+        assert isinstance(info, dict)
+        version = info.get("version", {}).get("number")
+        self.version = version
         self._version_major = int(self.version.split(".")[0])
         self.name = self.version  # temporary
-        self.indices = ElasticsearchIndicePollux(parent=self, indices=self.es.indices)
-        self.cat = ElasticsearchCatPollux(parent=self, cat=self.es.cat)
-        self.ingest = ElasticsearchIngestPollux(parent=self, ingest=self.es.ingest)
+        self.indices = ElasticsearchExtIndice(parent=self, indices=self.es.indices)
+        self.cat = ElasticsearchExtCat(parent=self, cat=self.es.cat)
+        self.ingest = ElasticsearchExtIngest(parent=self, ingest=self.es.ingest)
         self.transport = self.es.transport
         v6_to_v8.fix_transport_instance(self.transport)
         self.scroll_cache = ScrollsCache()
@@ -326,6 +322,19 @@ class ElasticsearchPolluxClient(ElasticsearchBaseClient):
         return self.transport.perform_request(
             "PUT", _make_path(index, "_create", id), params=params, body=body
         )
+
+    def bulk(self,body, index=None, doc_type=None, **kwargs):
+        old_doc_type: str = ""
+        if self.version_major >= 7:
+            if isinstance(body, str):
+                actions = [json.loads(v.strip()) for v in body.split('\n') if v.strip()]
+                actions = v6_to_v8.fix_actions(actions)
+                body = "\n".join([
+                    json.dumps(action) if isinstance(action, dict) else action for action in actions
+                ])
+            doc_type = None
+        results = self.es.bulk(body, index=index, doc_type=doc_type, **kwargs)
+        return results
 
     def create(self, index, doc_type, id, body, **kwargs):  # normally: only params
         if self.version_major >= 7:
@@ -397,7 +406,17 @@ class ElasticsearchPolluxClient(ElasticsearchBaseClient):
             doc_type = "_doc"
             if "version" in kwargs and "version_type" not in kwargs:
                 kwargs["version_type"] = "external"
+            try:
+                return self.es.index(index=index, doc_type=doc_type, body=body, id=id, **kwargs)
+            except ConflictError:
+                # increase the version of 1 for update
+                if "version" in kwargs and isinstance(kwargs["version"], int):
+                    kwargs["version"] += 1
+                else:
+                    raise
+
         return self.es.index(index=index, doc_type=doc_type, body=body, id=id, **kwargs)
+
 
     def search(self, index=None, doc_type=None, body=None, **kwargs):
         old_doc_type: str = ""
@@ -477,3 +496,9 @@ class ElasticsearchPolluxClient(ElasticsearchBaseClient):
                 kwargs["version_type"] = kwargs.get("version_type", "external")
                 # kwargs["retry_on_conflict"]='5'
         return self.es.delete(index, doc_type, id, **kwargs)
+
+
+class ElasticsearchExt(ElasticsearchExtClient):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(es=Elasticsearch(*args, **kwargs))

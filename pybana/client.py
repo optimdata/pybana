@@ -3,8 +3,10 @@
 import json
 import os
 
-from elasticsearch import NotFoundError
+from elasticsearch import NotFoundError, Elasticsearch
 import elasticsearch_dsl
+
+from pybana.elastic.elastic_client import ElasticsearchExtClient
 
 from .models import Config, Dashboard, IndexPattern, Visualization, Search
 
@@ -19,6 +21,17 @@ DEFAULT_CONFIG = {
     "telemetry:optIn": False,
     "defaultIndex": None,
 }
+
+def _fix_es(using):
+    if isinstance(using, ElasticsearchExtClient):
+        return using
+    using = using or 'default'
+    es = elasticsearch_dsl.connections.get_connection(using)
+    if not isinstance(es, Elasticsearch):
+        return es
+    es_ext = ElasticsearchExtClient(es)
+    elasticsearch_dsl.connections.add_connection(using, es_ext)
+    return es_ext
 
 
 class Kibana:
@@ -44,17 +57,18 @@ class Kibana:
     def _search(self, type, using):
         klass = self.klasses.get(type)
         search = klass.search if klass else elasticsearch_dsl.Search
-        return search(index=self._index, using=using)
+        return search(index=self._index, using=_fix_es(using))
 
     def _get(self, klass, id, using):
-        ret = klass.get(index=self._index, id=id, using=using)
+        ret = klass.get(index=self._index, id=id, using=_fix_es(using))
         return ret
 
     def objects(self, type, using=None):
         return self._search(type, using=using).filter("term", type=type)
 
     def config_id(self, using=None):
-        elastic = elasticsearch_dsl.connections.get_connection(using or "default")
+        elastic = _fix_es(using or "default")
+        #return "config:6.7.1"
         return "config:%s" % elastic.info()["version"]["number"]
 
     def config(self, using=None):
@@ -67,7 +81,7 @@ class Kibana:
         """
         Create the elasticsearch index as kibana would do.
         """
-        elastic = elasticsearch_dsl.connections.get_connection("default")
+        elastic = _fix_es("default")
         mappingsfn = os.path.join(os.path.dirname(__file__), "mappings.json")
         suffix = 1
         while not elastic.indices.exists(self._index):

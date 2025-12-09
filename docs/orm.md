@@ -33,12 +33,12 @@ For now, four models have been implemented:
 ## Usage
 
 ```python
-from elasticsearch import Elasticsearch
 from elasticsearch_dsl import connections
 from pybana import Kibana, Visualization, Dashboard
+from pybana.elastic.elastic_client import ElasticsearchExtClient
 
 # Instantiate a connection to a Elasticsearch cluster
-elastic = Elasticsearch()
+elastic = ElasticsearchExtClient()
 
 # Add this connection as the default connection for elasticsearch_dsl
 connections.add_connection("default", elastic)
