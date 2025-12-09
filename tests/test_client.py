@@ -7,17 +7,13 @@ import sys
 import os
 from elasticsearch.exceptions import TransportError
 from elasticsearch.helpers import scan
-from elasticsearch import Elasticsearch
 
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
-from pybana.elastic.elastic_client import (
-    ElasticsearchExt,
-    ScrollsCache,
-    _get_scroll_id,
-)
-#from ..client.base import JSONSerializer
+from pybana.elastic.elastic_client import ElasticsearchExt, ScrollsCache, _get_scroll_id
+
+# from ..client.base import JSONSerializer
 from pybana.elastic.fixes_for_v8 import fusion_mappings, v6_to_v8, v8_to_v6
 
 
@@ -462,8 +458,8 @@ class TestElaticsearchClientCase(unittest.TestCase):
     def scroll_ops_process(self, host: str):
         elastic = ElasticsearchExt(
             hosts=[host],
-            #serializer=JSONSerializer(),
-            timeout=10
+            # serializer=JSONSerializer(),
+            timeout=10,
         )
         index = "test_scroll_ops"
         # step 1: create index
@@ -501,8 +497,8 @@ class TestElaticsearchClientCase(unittest.TestCase):
     def simple_es_operations(self, host: str):
         elastic = ElasticsearchExt(
             hosts=[host],
-            #serializer=JSONSerializer(),
-            timeout=10
+            # serializer=JSONSerializer(),
+            timeout=10,
         )
         index = "test_simple_es_operations"
         elastic.indices.delete(f"{index}*")

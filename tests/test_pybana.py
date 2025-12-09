@@ -50,6 +50,7 @@ def load_fixtures(elastic, kibana, index):
                 action = json.loads(line)
                 action["_index"] = index
                 yield action
+
     elastic.helpers_bulk(actions(), refresh="wait_for")
 
 
@@ -210,11 +211,9 @@ def test_vega_visualization():
         visualization = kibana.visualization(key)
         search = translator.translate(visualization, scope)
         search_data = search.to_dict()
-        if isinstance(search_data, list) and len(search_data)==1:
-            search_data=search_data[0]
-        assert (
-            search_data["aggs"]["category"]["date_histogram"]["interval"] == "1h"
-        )
+        if isinstance(search_data, list) and len(search_data) == 1:
+            search_data = search_data[0]
+        assert search_data["aggs"]["category"]["date_histogram"]["interval"] == "1h"
 
         response = search.execute()
         VegaTranslator().translate(visualization, response, scope)

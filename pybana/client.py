@@ -22,10 +22,11 @@ DEFAULT_CONFIG = {
     "defaultIndex": None,
 }
 
+
 def _fix_es(using):
     if isinstance(using, ElasticsearchExtClient):
         return using
-    using = using or 'default'
+    using = using or "default"
     es = elasticsearch_dsl.connections.get_connection(using)
     if not isinstance(es, Elasticsearch):
         return es
@@ -68,7 +69,7 @@ class Kibana:
 
     def config_id(self, using=None):
         elastic = _fix_es(using or "default")
-        #return "config:6.7.1"
+        # return "config:6.7.1"
         return "config:%s" % elastic.info()["version"]["number"]
 
     def config(self, using=None):

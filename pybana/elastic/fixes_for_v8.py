@@ -216,7 +216,6 @@ class V6ToV8:
         get_sub_dict(template, ["settings", "index"])["codec"] = "best_compression"
         return template
 
-
     def _remove_type(self, action):
         if isinstance(action, list):
             for v in action:
@@ -226,7 +225,6 @@ class V6ToV8:
                 del action["_type"]
             for v in action.values():
                 self._remove_type(v)
-
 
     def fix_actions(
         self, origin_actions: Union[Iterator[Dict], List[Dict], None]

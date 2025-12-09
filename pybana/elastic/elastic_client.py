@@ -1,6 +1,5 @@
 import logging
 import json
-from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from elasticsearch import Elasticsearch, helpers
@@ -279,7 +278,7 @@ class ScrollsCache:
 
 
 class ElasticsearchExtClient(ElasticsearchBaseClient):
-    def __init__(self, es: Optional[Elasticsearch]=None):
+    def __init__(self, es: Optional[Elasticsearch] = None):
         self.es = es or Elasticsearch()
         info = self.es.info()
         assert info is not None
@@ -323,15 +322,17 @@ class ElasticsearchExtClient(ElasticsearchBaseClient):
             "PUT", _make_path(index, "_create", id), params=params, body=body
         )
 
-    def bulk(self,body, index=None, doc_type=None, **kwargs):
-        old_doc_type: str = ""
+    def bulk(self, body, index=None, doc_type=None, **kwargs):
         if self.version_major >= 7:
             if isinstance(body, str):
-                actions = [json.loads(v.strip()) for v in body.split('\n') if v.strip()]
+                actions = [json.loads(v.strip()) for v in body.split("\n") if v.strip()]
                 actions = v6_to_v8.fix_actions(actions)
-                body = "\n".join([
-                    json.dumps(action) if isinstance(action, dict) else action for action in actions
-                ])
+                body = "\n".join(
+                    [
+                        json.dumps(action) if isinstance(action, dict) else action
+                        for action in actions
+                    ]
+                )
             doc_type = None
         results = self.es.bulk(body, index=index, doc_type=doc_type, **kwargs)
         return results
@@ -407,7 +408,9 @@ class ElasticsearchExtClient(ElasticsearchBaseClient):
             if "version" in kwargs and "version_type" not in kwargs:
                 kwargs["version_type"] = "external"
             try:
-                return self.es.index(index=index, doc_type=doc_type, body=body, id=id, **kwargs)
+                return self.es.index(
+                    index=index, doc_type=doc_type, body=body, id=id, **kwargs
+                )
             except ConflictError:
                 # increase the version of 1 for update
                 if "version" in kwargs and isinstance(kwargs["version"], int):
@@ -416,7 +419,6 @@ class ElasticsearchExtClient(ElasticsearchBaseClient):
                     raise
 
         return self.es.index(index=index, doc_type=doc_type, body=body, id=id, **kwargs)
-
 
     def search(self, index=None, doc_type=None, body=None, **kwargs):
         old_doc_type: str = ""
@@ -499,6 +501,5 @@ class ElasticsearchExtClient(ElasticsearchBaseClient):
 
 
 class ElasticsearchExt(ElasticsearchExtClient):
-
     def __init__(self, *args, **kwargs):
         super().__init__(es=Elasticsearch(*args, **kwargs))
