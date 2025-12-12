@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "lodash": "^4.17.21",
+    "node-fetch": "^2.6.1",
+    "vega": "^5.25.0"
+  }
+}

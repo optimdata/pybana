@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
 import json
-from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search
+
+from pybana.elastic.elastic_client import ElasticsearchExtClient
 
 
 def dumpindex(elastic, index, fn):
@@ -31,7 +32,7 @@ if __name__ == "__main__":
     import os
 
     dumpindex(
-        Elasticsearch(),
+        ElasticsearchExtClient(),
         ".kibana_pybana",
         os.path.join(os.path.dirname(__file__), "index.json"),
     )
