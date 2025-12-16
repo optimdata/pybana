@@ -23,16 +23,6 @@ DEFAULT_CONFIG = {
 }
 
 
-def _fix_es(using):
-    if isinstance(using, ElasticsearchExtClient):
-        return using
-    using = using or "default"
-    es = elasticsearch_dsl.connections.get_connection(using)
-    if not isinstance(es, Elasticsearch):
-        return es
-    es_ext = ElasticsearchExtClient(es)
-    elasticsearch_dsl.connections.add_connection(using, es_ext)
-    return es_ext
 
 
 class Kibana:
@@ -47,29 +37,44 @@ class Kibana:
         "search": Search,
     }
 
-    def __init__(self, index=".kibana"):
+    def get_es(self, using):
+        using = using or self._default
+        if isinstance(using, ElasticsearchExtClient):
+            return using
+        es = elasticsearch_dsl.connections.get_connection(using)
+        if not isinstance(es, Elasticsearch):
+            return es
+        es_ext = ElasticsearchExtClient(es)
+        assert isinstance(using, str)
+        elasticsearch_dsl.connections.add_connection(using, es_ext)
+        return es_ext
+
+    def __init__(self, *, using, index=".kibana"):
         """
         Initialize a client to kibana.
 
         :param index string: Index used by kibana (default: .kibana).
         """
+        self._default = self.get_es(using)
         self._index = index
 
     def _search(self, type, using):
         klass = self.klasses.get(type)
         search = klass.search if klass else elasticsearch_dsl.Search
-        return search(index=self._index, using=_fix_es(using))
+        es = self.get_es(using)
+        return search(index=self._index, using=es)
 
     def _get(self, klass, id, using):
-        ret = klass.get(index=self._index, id=id, using=_fix_es(using))
+        ret = klass.get(index=self._index, id=id, using=self.get_es(using))
+        return ret
+        setattr(ret, "_using", self.get_es(using))
         return ret
 
     def objects(self, type, using=None):
-        return self._search(type, using=using).filter("term", type=type)
+        return self._search(type, using=using)
 
     def config_id(self, using=None):
-        elastic = _fix_es(using or "default")
-        # return "config:6.7.1"
+        elastic = self.get_es(using)
         return "config:%s" % elastic.info()["version"]["number"]
 
     def config(self, using=None):
@@ -78,11 +83,16 @@ class Kibana:
         """
         return self._get(Config, self.config_id(using), using=using)
 
-    def init_index(self):
+    def is_v8(self, using=None):
+        elastic = self.get_es(using)
+        version = elastic.info()["version"]["number"].split(".")[0]
+        return version >= "8"
+
+    def init_index(self, using=None):
         """
         Create the elasticsearch index as kibana would do.
         """
-        elastic = _fix_es("default")
+        elastic = self.get_es(using)
         mappingsfn = os.path.join(os.path.dirname(__file__), "mappings.json")
         suffix = 1
         while not elastic.indices.exists(self._index):
@@ -101,10 +111,12 @@ class Kibana:
         date formats etc
         """
         try:
+            print(f"init_config(using={using})")
             self.config(using=using)
         except NotFoundError:
+            print("NotFoundError: creating default config")
             Config(config=DEFAULT_CONFIG, meta={"id": self.config_id()}).save(
-                index=self._index, refresh="wait_for", using=using
+                index=self._index, refresh="wait_for", using=self.get_es(using)
             )
 
     def index_patterns(self, using=None):

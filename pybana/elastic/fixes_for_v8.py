@@ -142,19 +142,27 @@ def _is_calendar_interval(interval: str) -> bool:
 
 class V6ToV8:
     def fix_transport_instance(self, transport: Transport):
-        _perform_request = transport.perform_request
-        transport._perform_request = _perform_request  # type: ignore
+        if hasattr(transport, "_perform_request_v8"):
+            print("Transport already fixed for v8")
+            return
 
         def new_perform_request(method, url, headers=None, params=None, body=None):
             try:
-                return transport._perform_request(  # type: ignore
-                    method=method, url=url, headers=headers, params=params, body=body
-                )
-            except TransportError as e:
-                if len(e.args) > 2:
-                    e.args = v6_to_v8.fix_transport_error_args(e.args)
+                try:
+                    #print(f"new_perform_request: method={method}, url={url}, params:{params}, body:{body}")
+                    return transport._perform_request_v8(  # type: ignore
+                        method=method, url=url, headers=headers, params=params, body=body
+                    )
+                except TransportError as e:
+                    if len(e.args) > 2:
+                        e.args = v6_to_v8.fix_transport_error_args(e.args)
+                    raise
+            except Exception as e:
+                print(f"ERROR in new_perform_request: method={method}, url={url}, params:{params}, body:{body}: {e}, hosts: {transport.hosts}")
                 raise
 
+        _perform_request_v8 = transport.perform_request
+        transport._perform_request_v8 = _perform_request_v8  # type: ignore
         transport.perform_request = new_perform_request
 
     def fix_dynamic_template(self, dynamic: Dict) -> bool:

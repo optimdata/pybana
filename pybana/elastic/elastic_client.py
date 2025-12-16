@@ -67,7 +67,7 @@ class ElasticsearchExtIndice(ElasticsearchSubClient):
         self._indices.create(index=index, body=body, **kwargs)
         return 1
 
-    def refresh(self, index, **kwargs):  # normally: only params
+    def refresh(self, index=None, **kwargs):  # normally: only params
         return self._indices.refresh(index=index, **kwargs)
 
     def delete(self, index: Optional[str], **kwargs):  # normally: only params
@@ -403,14 +403,16 @@ class ElasticsearchExtClient(ElasticsearchBaseClient):
         return self.es.count(index=index, doc_type=doc_type, body=body, **kwargs)
 
     def index(self, index, doc_type, body, id=None, **kwargs):
+        print(f"indexing doc in index={index}, doc_type={doc_type}, id={id}")
         if self.version_major >= 7:
             doc_type = "_doc"
             if "version" in kwargs and "version_type" not in kwargs:
                 kwargs["version_type"] = "external"
             try:
-                return self.es.index(
+                r = self.es.index(
                     index=index, doc_type=doc_type, body=body, id=id, **kwargs
                 )
+                return r
             except ConflictError:
                 # increase the version of 1 for update
                 if "version" in kwargs and isinstance(kwargs["version"], int):
