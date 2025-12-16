@@ -116,7 +116,9 @@ class Kibana:
             self.config(using=using)
         except NotFoundError:
             print("NotFoundError: creating default config")
-            Config(config=DEFAULT_CONFIG, meta={"id": self.config_id()}).save(
+            Config(
+                config=DEFAULT_CONFIG, meta={"id": self.config_id(using=using)}
+            ).save(
                 index=self._index, refresh="wait_for", using=self.get_es(using)
             )
 
