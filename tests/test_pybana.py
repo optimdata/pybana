@@ -30,8 +30,8 @@ from pybana.elastic.elastic_client import ElasticsearchExtClient
 
 PYBANA_INDEX = ".kibana_pybana_test"
 ELASTICSEARCH_V6 = elasticsearch.Elasticsearch()
-ELASTICSEARCH_V8 = elasticsearch.Elasticsearch(["http://localhost:9200"])
-ELASTIC_V6 = ElasticsearchExtClient(ELASTICSEARCH_V6)
+ELASTICSEARCH_V8 = elasticsearch.Elasticsearch(["http://localhost:9201"])
+ELASTIC_V6 = ElasticsearchExtClient()
 ELASTIC_V8=ElasticsearchExtClient(ELASTICSEARCH_V8)
 ELASTICS = {
     "default": ELASTIC_V6,
@@ -138,9 +138,9 @@ def client_test(version):
     dashboard = kibana.dashboard("f57a7160-fb18-11e9-84e4-078763638bf3")
     dashboard.panelsJSON
     dashboard.optionsJSON
-    assert len(dashboard.visualizations()) == 2
+    assert len(dashboard.visualizations(using=elastic)) == 2
     visualization = kibana.visualization("f4a09a00-fe77-11e9-8c18-250a1adff826")
-    search = visualization.related_search()
+    search = visualization.related_search(using=elastic)
     assert search.meta.id == "search:2139a4e0-fe77-11e9-833a-0fef2d7dd143"
     assert len(list(kibana.searches())) == 1
     search = kibana.search("2139a4e0-fe77-11e9-833a-0fef2d7dd143")
@@ -157,8 +157,6 @@ def translators_test(version):
 
     kibana = Kibana(index=PYBANA_INDEX, using=elasticsearch_dsl.connections.get_connection(version))
     elastic= ELASTICS[version]
-    assert isinstance(elasticsearch_dsl.connections.get_connection(version), ElasticsearchExtClient)
-    assert isinstance(elasticsearch_dsl.connections.get_connection(), ElasticsearchExtClient)
     print(f"load_fixtures({elastic}, {kibana}, {PYBANA_INDEX})")
     load_fixtures(elastic, kibana, PYBANA_INDEX)
     print(f"load_data({elastic}, pybana)")

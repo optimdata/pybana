@@ -67,7 +67,7 @@ class ElasticsearchExtIndice(ElasticsearchSubClient):
         self._indices.create(index=index, body=body, **kwargs)
         return 1
 
-    def refresh(self, index=None, **kwargs):  # normally: only params
+    def refresh(self, index, **kwargs):  # normally: only params
         return self._indices.refresh(index=index, **kwargs)
 
     def delete(self, index: Optional[str], **kwargs):  # normally: only params

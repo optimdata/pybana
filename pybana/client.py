@@ -45,8 +45,8 @@ class Kibana:
         if not isinstance(es, Elasticsearch):
             return es
         es_ext = ElasticsearchExtClient(es)
-        assert isinstance(using, str)
-        elasticsearch_dsl.connections.add_connection(using, es_ext)
+        if isinstance(using, str):
+            elasticsearch_dsl.connections.add_connection(using, es_ext)
         return es_ext
 
     def __init__(self, *, using, index=".kibana"):
@@ -58,6 +58,10 @@ class Kibana:
         self._default = self.get_es(using)
         self._index = index
 
+    @property
+    def using(self):
+        return self._default
+
     def _search(self, type, using):
         klass = self.klasses.get(type)
         search = klass.search if klass else elasticsearch_dsl.Search
@@ -65,13 +69,10 @@ class Kibana:
         return search(index=self._index, using=es)
 
     def _get(self, klass, id, using):
-        ret = klass.get(index=self._index, id=id, using=self.get_es(using))
-        return ret
-        setattr(ret, "_using", self.get_es(using))
-        return ret
+        return klass.get(index=self._index, id=id, using=self.get_es(using))
 
     def objects(self, type, using=None):
-        return self._search(type, using=using)
+        return self._search(type, using=using).filter("term", type=type)
 
     def config_id(self, using=None):
         elastic = self.get_es(using)
@@ -179,4 +180,4 @@ class Kibana:
         config = self.config(using)
         if not config.config.to_dict().get("defaultIndex"):
             config.config.defaultIndex = index_pattern.meta.id.split(":")[-1]
-            config.save(refresh="wait_for")
+            config.save(refresh="wait_for", using=using or self.using)

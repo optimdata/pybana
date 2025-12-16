@@ -13,16 +13,6 @@ class BaseDocument(Document):
     type = Keyword()
     #_using = None
 
-    @property
-    def using(self):
-        return self._using if hasattr(self, '_using') else 'default'
-
-    @using.setter
-    def using(self, value):
-        self.__setattr__("_using", value)
-        #self._using = value
-
-
     # List of json attributes.
     json_attrs = []
 
@@ -60,31 +50,31 @@ class IndexPattern(BaseDocument):
 class Search(BaseDocument):
     _type = "search"
 
-    def index(self, using=None):
+    def index(self, using):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
         """
         search_source = self.search["kibanaSavedObjectMeta"]["searchSourceJSON"]
         key = json.loads(search_source).get("index")
-        return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index, using=using or self.using)
+        return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index, using=using)
 
 
 class Visualization(BaseDocument):
     _type = "visualization"
     json_attrs = ["visState", "uiStateJSON"]
 
-    def related_search(self, using=None):
+    def related_search(self, using):
         """
         Returns the search associated to the visualization.
 
         An error is raised if the visualization is not associated to any search.
         """
         return Search.get(
-            id=f"search:{self.visualization.savedSearchId}", index=self.meta.index, using=using or self.using
+            id=f"search:{self.visualization.savedSearchId}", index=self.meta.index, using=using
         )
 
-    def index(self, using=None):
+    def index(self, using):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
@@ -93,7 +83,7 @@ class Visualization(BaseDocument):
             return self.related_search(using).index(using)
         search_source = self.visualization.kibanaSavedObjectMeta.searchSourceJSON
         key = json.loads(search_source).get("index")
-        return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index, using=using or self.using)
+        return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index, using=using)
 
     def filters(self):
         """
@@ -111,7 +101,7 @@ class Dashboard(BaseDocument):
     _type = "dashboard"
     json_attrs = ["panelsJSON", "optionsJSON"]
 
-    def visualizations(self, missing="skip", using=None):
+    def visualizations(self, *, using, missing="skip"):
         """
         Does the join automatically by parsing panelsJSON.
 
@@ -119,21 +109,18 @@ class Dashboard(BaseDocument):
         :param str using: connection alias to use, defaults to ``'default'``
         """
         panels = [panel for panel in self.panelsJSON if panel.type == "visualization"]
-        visu =(
+        return (
             Visualization.mget(
                 docs=["visualization:" + panel["id"] for panel in panels],
                 index=self.meta.index,
                 missing=missing,
-                using=self.using,
+                using=using,
             )
             if panels
             else []
         )
-        for r in visu:
-            setattr(r, "_using", using or self.using)
-        return visu
 
-    def searches(self, missing="skip", using=None):
+    def searches(self, *, using, missing="skip"):
         """
         Does the join automatically by parsing panelsJSON.
 
@@ -141,16 +128,13 @@ class Dashboard(BaseDocument):
         :param str using: connection alias to use, defaults to ``'default'``
         """
         panels = [panel for panel in self.panelsJSON if panel.type == "search"]
-        for r in (
+        return (
             Search.mget(
                 docs=["search:" + panel["id"] for panel in panels],
                 index=self.meta.index,
                 missing=missing,
-                using=using or self.using,
+                using=using,
             )
             if panels
             else []
-        ):
-            setattr(r, "_using", using or self.using)
-            yield r
-
+        )
