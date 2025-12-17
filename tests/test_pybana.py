@@ -63,7 +63,6 @@ def load_data(elastic, index):
     ts = datetime.datetime(2019, 1, 1)
     if elastic.indices.exists(index):
         elastic.indices.delete(index)
-    print(f"creating index {index} for {elastic}")
     elastic.indices.create(
         index,
         body={
@@ -132,7 +131,6 @@ def client_test(version):
     visualization.uiStateJSON
     assert visualization.index(using=elastic).meta.id == index_pattern.meta.id
     dashboards = list(kibana.dashboards())
-    print(f"dashboards: {dashboards[0].__dict__}")
     assert len(dashboards) == 1
     dashboard = kibana.dashboard("f57a7160-fb18-11e9-84e4-078763638bf3")
     dashboard.panelsJSON
@@ -161,9 +159,7 @@ def translators_test(version):
         index=PYBANA_INDEX, using=elasticsearch_dsl.connections.get_connection(version)
     )
     elastic = ELASTICS[version]
-    print(f"load_fixtures({elastic}, {kibana}, {PYBANA_INDEX})")
     load_fixtures(elastic, kibana, PYBANA_INDEX)
-    print(f"load_data({elastic}, pybana)")
     load_data(elastic, "pybana")
     assert isinstance(elastic, ElasticsearchExtClient)
 
@@ -178,9 +174,6 @@ def translators_test(version):
         kibana.config(),
     )
     for visualization in kibana.visualizations().scan():
-        print(
-            f"visualization: {visualization.__class__.__name__} {visualization.__dict__}"
-        )
         if visualization.visState["type"] in (
             "histogram",
             "metric",
@@ -189,11 +182,7 @@ def translators_test(version):
             "vega",
             "table",
         ):
-            print(f"visu: {visualization}")
-            # elastic.indices.refresh()
-            # print("after refresh")
             search = translator.translate(visualization, scope)
-            print("after translate")
             visualization_id = visualization.meta.id.split(":")[-1]
             if visualization_id in (
                 "695c02f0-fb1a-11e9-84e4-078763638bf3",
@@ -214,7 +203,6 @@ def translators_test(version):
                 "5da362a0-732e-11ea-9c16-797f1f2fa4aa",
                 "96645fc0-d636-11ea-8206-6f7030d7dd42",
             ):
-                print(f"search : {search.__class__.__name__} {search.__dict__}")
                 response = search.execute()
                 VegaTranslator(using=elastic).translate(visualization, response, scope)
             if visualization_id in ("d6c8b900-eea7-11eb-8e30-87c8d06ba6ff",):

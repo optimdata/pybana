@@ -403,16 +403,14 @@ class ElasticsearchExtClient(ElasticsearchBaseClient):
         return self.es.count(index=index, doc_type=doc_type, body=body, **kwargs)
 
     def index(self, index, doc_type, body, id=None, **kwargs):
-        print(f"indexing doc in index={index}, doc_type={doc_type}, id={id}")
         if self.version_major >= 7:
             doc_type = "_doc"
             if "version" in kwargs and "version_type" not in kwargs:
                 kwargs["version_type"] = "external"
             try:
-                r = self.es.index(
+                return self.es.index(
                     index=index, doc_type=doc_type, body=body, id=id, **kwargs
                 )
-                return r
             except ConflictError:
                 # increase the version of 1 for update
                 if "version" in kwargs and isinstance(kwargs["version"], int):

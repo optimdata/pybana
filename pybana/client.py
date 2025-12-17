@@ -110,10 +110,8 @@ class Kibana:
         date formats etc
         """
         try:
-            print(f"init_config(using={using})")
             self.config(using=using)
         except NotFoundError:
-            print("NotFoundError: creating default config")
             Config(
                 config=DEFAULT_CONFIG, meta={"id": self.config_id(using=using)}
             ).save(index=self._index, refresh="wait_for", using=self.get_es(using))
