@@ -4,8 +4,6 @@ import json
 
 from elasticsearch_dsl import Document, Keyword
 
-from pybana.elastic.elastic_client import ElasticsearchExtClient
-
 __all__ = ("BaseDocument", "Config", "IndexPattern", "Visualization", "Dashboard")
 
 
