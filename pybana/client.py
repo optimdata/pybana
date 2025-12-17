@@ -25,7 +25,7 @@ DEFAULT_CONFIG = {
 
 class Kibana:
     """
-    Kibana client.
+    Kibana client (with support of multi elasticsearch).
     """
 
     klasses = {
