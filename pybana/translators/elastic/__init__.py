@@ -13,7 +13,6 @@ __all__ = ("ElasticTranslator", "FilterTranslator")
 
 
 class ElasticTranslator:
-
     def __init__(self, using):
         self._using = using
 
@@ -70,7 +69,9 @@ class ElasticTranslator:
                 index = data["url"]["index"]
                 body = replace_magic_keywords(data["url"]["body"])
                 body = add_time_zone(body)
-                search = elasticsearch_dsl.Search(index=index, using=self._using).update_from_dict(body)
+                search = elasticsearch_dsl.Search(
+                    index=index, using=self._using
+                ).update_from_dict(body)
                 if data["url"].get("%timefield%"):
                     ts = data["url"]["%timefield%"]
                     search = search.filter(

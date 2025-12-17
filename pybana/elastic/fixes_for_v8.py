@@ -149,16 +149,22 @@ class V6ToV8:
         def new_perform_request(method, url, headers=None, params=None, body=None):
             try:
                 try:
-                    #print(f"new_perform_request: method={method}, url={url}, params:{params}, body:{body}")
+                    # print(f"new_perform_request: method={method}, url={url}, params:{params}, body:{body}")
                     return transport._perform_request_v8(  # type: ignore
-                        method=method, url=url, headers=headers, params=params, body=body
+                        method=method,
+                        url=url,
+                        headers=headers,
+                        params=params,
+                        body=body,
                     )
                 except TransportError as e:
                     if len(e.args) > 2:
                         e.args = v6_to_v8.fix_transport_error_args(e.args)
                     raise
             except Exception as e:
-                print(f"ERROR in new_perform_request: method={method}, url={url}, params:{params}, body:{body}: {e}, hosts: {transport.hosts}")
+                print(
+                    f"ERROR in new_perform_request: method={method}, url={url}, params:{params}, body:{body}: {e}, hosts: {transport.hosts}"
+                )
                 raise
 
         _perform_request_v8 = transport.perform_request

@@ -23,8 +23,6 @@ DEFAULT_CONFIG = {
 }
 
 
-
-
 class Kibana:
     """
     Kibana client.
@@ -118,9 +116,7 @@ class Kibana:
             print("NotFoundError: creating default config")
             Config(
                 config=DEFAULT_CONFIG, meta={"id": self.config_id(using=using)}
-            ).save(
-                index=self._index, refresh="wait_for", using=self.get_es(using)
-            )
+            ).save(index=self._index, refresh="wait_for", using=self.get_es(using))
 
     def index_patterns(self, using=None):
         """

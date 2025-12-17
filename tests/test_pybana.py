@@ -32,12 +32,8 @@ PYBANA_INDEX = ".kibana_pybana_test"
 ELASTICSEARCH_V6 = elasticsearch.Elasticsearch()
 ELASTICSEARCH_V8 = elasticsearch.Elasticsearch(["http://localhost:9201"])
 ELASTIC_V6 = ElasticsearchExtClient()
-ELASTIC_V8=ElasticsearchExtClient(ELASTICSEARCH_V8)
-ELASTICS = {
-    "default": ELASTIC_V6,
-    "v6": ELASTIC_V6,
-    "v8": ELASTIC_V8,
-}
+ELASTIC_V8 = ElasticsearchExtClient(ELASTICSEARCH_V8)
+ELASTICS = {"default": ELASTIC_V6, "v6": ELASTIC_V6, "v8": ELASTIC_V8}
 elasticsearch_dsl.connections.add_connection("default", ELASTIC_V6)
 elasticsearch_dsl.connections.add_connection("v6", ELASTIC_V6)
 elasticsearch_dsl.connections.add_connection("v8", ELASTIC_V8)
@@ -104,15 +100,18 @@ def load_data(elastic, index):
 
     elasticsearch.helpers.bulk(elastic, actions(), refresh="wait_for")
 
+
 def test_client_v6():
     client_test("v6")
+
+
 def test_client_v8():
     client_test("v8")
 
 
 def client_test(version):
     kibana = Kibana(index=PYBANA_INDEX, using=version)
-    elastic= ELASTICS[version]
+    elastic = ELASTICS[version]
     elastic.indices.delete(f"{PYBANA_INDEX}*")
     elastic.indices.create(f"{PYBANA_INDEX}_1")
     load_fixtures(elastic, kibana, PYBANA_INDEX)
@@ -146,17 +145,22 @@ def client_test(version):
     search = kibana.search("2139a4e0-fe77-11e9-833a-0fef2d7dd143")
     assert visualization.index(using=elastic).meta.id == index_pattern.meta.id
 
+
 def test_translators_v6():
     translators_test("v6")
+
 
 def test_translators_v8():
     translators_test("v8")
 
-def translators_test(version):
-    #elasticsearch_dsl.connections.add_connection("default", ELASTIC_V8)
 
-    kibana = Kibana(index=PYBANA_INDEX, using=elasticsearch_dsl.connections.get_connection(version))
-    elastic= ELASTICS[version]
+def translators_test(version):
+    # elasticsearch_dsl.connections.add_connection("default", ELASTIC_V8)
+
+    kibana = Kibana(
+        index=PYBANA_INDEX, using=elasticsearch_dsl.connections.get_connection(version)
+    )
+    elastic = ELASTICS[version]
     print(f"load_fixtures({elastic}, {kibana}, {PYBANA_INDEX})")
     load_fixtures(elastic, kibana, PYBANA_INDEX)
     print(f"load_data({elastic}, pybana)")
@@ -164,7 +168,7 @@ def translators_test(version):
     assert isinstance(elastic, ElasticsearchExtClient)
 
     kibana.init_config()
-    #assert False
+    # assert False
 
     translator = ElasticTranslator(using=elastic)
     scope = Scope(
@@ -174,7 +178,9 @@ def translators_test(version):
         kibana.config(),
     )
     for visualization in kibana.visualizations().scan():
-        print(f"visualization: {visualization.__class__.__name__} {visualization.__dict__}")
+        print(
+            f"visualization: {visualization.__class__.__name__} {visualization.__dict__}"
+        )
         if visualization.visState["type"] in (
             "histogram",
             "metric",
@@ -184,8 +190,8 @@ def translators_test(version):
             "table",
         ):
             print(f"visu: {visualization}")
-            #elastic.indices.refresh()
-            #print("after refresh")
+            # elastic.indices.refresh()
+            # print("after refresh")
             search = translator.translate(visualization, scope)
             print("after translate")
             visualization_id = visualization.meta.id.split(":")[-1]
@@ -227,14 +233,18 @@ def translators_test(version):
                     ret = metric.contribute(agg, response.aggregations, response)
                     assert ret == results[agg["id"]]
 
+
 def test_vega_visualization_v6():
     vega_visualization_test("v6")
+
+
 def test_vega_visualization_v8():
     vega_visualization_test("v8")
 
+
 def vega_visualization_test(version):
     kibana = Kibana(index=PYBANA_INDEX, using=version)
-    elastic= ELASTICS[version]
+    elastic = ELASTICS[version]
 
     load_fixtures(elastic, kibana, PYBANA_INDEX)
     load_data(elastic, "pybana")

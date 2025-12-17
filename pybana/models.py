@@ -11,7 +11,7 @@ __all__ = ("BaseDocument", "Config", "IndexPattern", "Visualization", "Dashboard
 
 class BaseDocument(Document):
     type = Keyword()
-    #_using = None
+    # _using = None
 
     # List of json attributes.
     json_attrs = []
@@ -57,7 +57,9 @@ class Search(BaseDocument):
         """
         search_source = self.search["kibanaSavedObjectMeta"]["searchSourceJSON"]
         key = json.loads(search_source).get("index")
-        return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index, using=using)
+        return IndexPattern.get(
+            id=f"index-pattern:{key}", index=self.meta.index, using=using
+        )
 
 
 class Visualization(BaseDocument):
@@ -71,7 +73,9 @@ class Visualization(BaseDocument):
         An error is raised if the visualization is not associated to any search.
         """
         return Search.get(
-            id=f"search:{self.visualization.savedSearchId}", index=self.meta.index, using=using
+            id=f"search:{self.visualization.savedSearchId}",
+            index=self.meta.index,
+            using=using,
         )
 
     def index(self, using):
@@ -83,7 +87,9 @@ class Visualization(BaseDocument):
             return self.related_search(using).index(using)
         search_source = self.visualization.kibanaSavedObjectMeta.searchSourceJSON
         key = json.loads(search_source).get("index")
-        return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index, using=using)
+        return IndexPattern.get(
+            id=f"index-pattern:{key}", index=self.meta.index, using=using
+        )
 
     def filters(self):
         """
