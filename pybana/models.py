@@ -9,6 +9,7 @@ __all__ = ("BaseDocument", "Config", "IndexPattern", "Visualization", "Dashboard
 
 class BaseDocument(Document):
     type = Keyword()
+    # _using = None
 
     # List of json attributes.
     json_attrs = []
@@ -47,40 +48,46 @@ class IndexPattern(BaseDocument):
 class Search(BaseDocument):
     _type = "search"
 
-    def index(self):
+    def index(self, using):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
         """
         search_source = self.search["kibanaSavedObjectMeta"]["searchSourceJSON"]
         key = json.loads(search_source).get("index")
-        return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index)
+        return IndexPattern.get(
+            id=f"index-pattern:{key}", index=self.meta.index, using=using
+        )
 
 
 class Visualization(BaseDocument):
     _type = "visualization"
     json_attrs = ["visState", "uiStateJSON"]
 
-    def related_search(self):
+    def related_search(self, using):
         """
         Returns the search associated to the visualization.
 
         An error is raised if the visualization is not associated to any search.
         """
         return Search.get(
-            id=f"search:{self.visualization.savedSearchId}", index=self.meta.index
+            id=f"search:{self.visualization.savedSearchId}",
+            index=self.meta.index,
+            using=using,
         )
 
-    def index(self):
+    def index(self, using):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
         """
         if hasattr(self.visualization, "savedSearchId"):
-            return self.related_search().index()
+            return self.related_search(using).index(using)
         search_source = self.visualization.kibanaSavedObjectMeta.searchSourceJSON
         key = json.loads(search_source).get("index")
-        return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index)
+        return IndexPattern.get(
+            id=f"index-pattern:{key}", index=self.meta.index, using=using
+        )
 
     def filters(self):
         """
@@ -98,7 +105,7 @@ class Dashboard(BaseDocument):
     _type = "dashboard"
     json_attrs = ["panelsJSON", "optionsJSON"]
 
-    def visualizations(self, missing="skip", using=None):
+    def visualizations(self, *, using, missing="skip"):
         """
         Does the join automatically by parsing panelsJSON.
 
@@ -117,7 +124,7 @@ class Dashboard(BaseDocument):
             else []
         )
 
-    def searches(self, missing="skip", using=None):
+    def searches(self, *, using, missing="skip"):
         """
         Does the join automatically by parsing panelsJSON.
 

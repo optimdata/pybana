@@ -14,8 +14,8 @@ class ContextVisualization:
     :param pybana.Config config: Config of the kibana instance.
     """
 
-    def __init__(self, visualization, config):
-        self._index_pattern = visualization.index()
+    def __init__(self, visualization, config, using=None):
+        self._index_pattern = visualization.index(using=using)
         self._state = visualization.visState.to_dict()
         self._ui_state = visualization.uiStateJSON.to_dict()
         self._config = config

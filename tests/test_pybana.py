@@ -29,9 +29,14 @@ from pybana.elastic.elastic_client import ElasticsearchExtClient
 
 
 PYBANA_INDEX = ".kibana_pybana_test"
-ELASTIC1 = elasticsearch.Elasticsearch()
-ELASTIC = ElasticsearchExtClient()
-elasticsearch_dsl.connections.add_connection("default", ELASTIC1)
+ELASTICSEARCH_V6 = elasticsearch.Elasticsearch()
+ELASTICSEARCH_V8 = elasticsearch.Elasticsearch(["http://localhost:9201"])
+ELASTIC_V6 = ElasticsearchExtClient()
+ELASTIC_V8 = ElasticsearchExtClient(ELASTICSEARCH_V8)
+ELASTICS = {"default": ELASTIC_V6, "v6": ELASTIC_V6, "v8": ELASTIC_V8}
+elasticsearch_dsl.connections.add_connection("default", ELASTIC_V6)
+elasticsearch_dsl.connections.add_connection("v6", ELASTIC_V6)
+elasticsearch_dsl.connections.add_connection("v8", ELASTIC_V8)
 
 
 def load_fixtures(elastic, kibana, index):
@@ -95,11 +100,20 @@ def load_data(elastic, index):
     elasticsearch.helpers.bulk(elastic, actions(), refresh="wait_for")
 
 
-def test_client():
-    kibana = Kibana(PYBANA_INDEX)
-    ELASTIC.indices.delete(f"{PYBANA_INDEX}*")
-    ELASTIC.indices.create(f"{PYBANA_INDEX}_1")
-    load_fixtures(ELASTIC, kibana, PYBANA_INDEX)
+def test_client_v6():
+    client_test("v6")
+
+
+def test_client_v8():
+    client_test("v8")
+
+
+def client_test(version):
+    kibana = Kibana(index=PYBANA_INDEX, using=version)
+    elastic = ELASTICS[version]
+    elastic.indices.delete(f"{PYBANA_INDEX}*")
+    elastic.indices.create(f"{PYBANA_INDEX}_1")
+    load_fixtures(elastic, kibana, PYBANA_INDEX)
     kibana.init_config()
     kibana.init_config()
     assert kibana.config()
@@ -115,27 +129,44 @@ def test_client():
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.visState
     visualization.uiStateJSON
-    assert visualization.index().meta.id == index_pattern.meta.id
+    assert visualization.index(using=elastic).meta.id == index_pattern.meta.id
     dashboards = list(kibana.dashboards())
     assert len(dashboards) == 1
     dashboard = kibana.dashboard("f57a7160-fb18-11e9-84e4-078763638bf3")
     dashboard.panelsJSON
     dashboard.optionsJSON
-    assert len(dashboard.visualizations()) == 2
+    assert len(dashboard.visualizations(using=elastic)) == 2
     visualization = kibana.visualization("f4a09a00-fe77-11e9-8c18-250a1adff826")
-    search = visualization.related_search()
+    search = visualization.related_search(using=elastic)
     assert search.meta.id == "search:2139a4e0-fe77-11e9-833a-0fef2d7dd143"
     assert len(list(kibana.searches())) == 1
     search = kibana.search("2139a4e0-fe77-11e9-833a-0fef2d7dd143")
-    assert visualization.index().meta.id == index_pattern.meta.id
+    assert visualization.index(using=elastic).meta.id == index_pattern.meta.id
 
 
-def test_translators():
-    kibana = Kibana(PYBANA_INDEX)
-    load_fixtures(ELASTIC, kibana, PYBANA_INDEX)
-    load_data(ELASTIC, "pybana")
+def test_translators_v6():
+    translators_test("v6")
+
+
+def test_translators_v8():
+    translators_test("v8")
+
+
+def translators_test(version):
+    # elasticsearch_dsl.connections.add_connection("default", ELASTIC_V8)
+
+    kibana = Kibana(
+        index=PYBANA_INDEX, using=elasticsearch_dsl.connections.get_connection(version)
+    )
+    elastic = ELASTICS[version]
+    load_fixtures(elastic, kibana, PYBANA_INDEX)
+    load_data(elastic, "pybana")
+    assert isinstance(elastic, ElasticsearchExtClient)
+
     kibana.init_config()
-    translator = ElasticTranslator()
+    # assert False
+
+    translator = ElasticTranslator(using=elastic)
     scope = Scope(
         datetime.datetime(2019, 1, 1, tzinfo=pytz.utc),
         datetime.datetime(2019, 1, 3, tzinfo=pytz.utc),
@@ -173,7 +204,7 @@ def test_translators():
                 "96645fc0-d636-11ea-8206-6f7030d7dd42",
             ):
                 response = search.execute()
-                VegaTranslator().translate(visualization, response, scope)
+                VegaTranslator(using=elastic).translate(visualization, response, scope)
             if visualization_id in ("d6c8b900-eea7-11eb-8e30-87c8d06ba6ff",):
                 response = search.execute()
                 metric = VEGA_METRICS["top_hits"]()
@@ -191,12 +222,22 @@ def test_translators():
                     assert ret == results[agg["id"]]
 
 
-def test_vega_visualization():
-    kibana = Kibana(PYBANA_INDEX)
-    load_fixtures(ELASTIC, kibana, PYBANA_INDEX)
-    load_data(ELASTIC, "pybana")
+def test_vega_visualization_v6():
+    vega_visualization_test("v6")
+
+
+def test_vega_visualization_v8():
+    vega_visualization_test("v8")
+
+
+def vega_visualization_test(version):
+    kibana = Kibana(index=PYBANA_INDEX, using=version)
+    elastic = ELASTICS[version]
+
+    load_fixtures(elastic, kibana, PYBANA_INDEX)
+    load_data(elastic, "pybana")
     kibana.init_config()
-    translator = ElasticTranslator()
+    translator = ElasticTranslator(using=elastic)
     scope = Scope(
         datetime.datetime(2019, 1, 1, tzinfo=pytz.utc),
         datetime.datetime(2019, 1, 3, tzinfo=pytz.utc),
@@ -216,7 +257,7 @@ def test_vega_visualization():
         assert search_data["aggs"]["category"]["date_histogram"]["interval"] == "1h"
 
         response = search.execute()
-        VegaTranslator().translate(visualization, response, scope)
+        VegaTranslator(using=elastic).translate(visualization, response, scope)
 
 
 def test_elastic_translator_helpers():
