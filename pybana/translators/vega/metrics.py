@@ -93,7 +93,7 @@ class TopHitsMetric(BaseMetric):
         values = [
             value
             for hit in bucket[agg["id"]]["hits"]["hits"]
-            for value in flatten(hit["_source"][agg["params"]["field"]])
+            for value in flatten(hit["_source"].get(agg["params"]["field"]))
             if value is not None
         ]
         aggregate = agg["params"]["aggregate"]
