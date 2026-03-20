@@ -6,13 +6,6 @@ import elasticsearch
 import elasticsearch_dsl
 import json
 import os
-import pytest
-import pytz
-import sys
-
-BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
-sys.path.insert(0, BASE_DIRECTORY)  # NOQA
-
 from pybana import (
     Scope,
     ElasticTranslator,
@@ -26,6 +19,12 @@ from pybana.translators.elastic.buckets import (
     compute_auto_interval,
 )
 from pybana.elastic.elastic_client import ElasticsearchExtClient
+import pytest
+import pytz
+import sys
+
+BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
+sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
 
 PYBANA_INDEX = ".kibana_pybana_test"

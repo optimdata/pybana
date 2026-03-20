@@ -3,15 +3,14 @@
 
 import json
 import os
-import sys
-
-BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")
-sys.path.insert(0, BASE_DIRECTORY)
-
 from pybana.kibana_refs import (
     kibana_saved_object_data_source_dict,
     resolve_index_pattern_document_id,
 )
+import sys
+
+BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")
+sys.path.insert(0, BASE_DIRECTORY)
 
 
 def test_resolve_legacy_inline_index():

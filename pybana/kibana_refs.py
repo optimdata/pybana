@@ -89,5 +89,6 @@ def kibana_saved_object_data_source_dict(document):
         if key in data:
             return data[key]
     raise KeyError(
-        "Expected index-pattern or data-view in document, got keys: %s" % list(data.keys())
+        "Expected index-pattern or data-view in document, got keys: %s"
+        % list(data.keys())
     )
