@@ -1002,9 +1002,7 @@ class VegaTranslator:
 
     def translate_legacy(self, visualization, response, scope):
         state = ContextVisualization(
-            visualization=visualization,
-            config=scope.config,
-            using=self._using,
+            visualization=visualization, config=scope.config, using=self._using
         )
 
         ret = self.conf(state)

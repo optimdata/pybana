@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
 
-import ast
-import datetime
-import elasticsearch
-import elasticsearch_dsl
-import json
 import os
-from pybana import (
+import sys
+
+BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
+sys.path.insert(0, BASE_DIRECTORY)  # NOQA
+
+import ast  # noqa: E402
+import datetime  # noqa: E402
+import elasticsearch  # noqa: E402
+import elasticsearch_dsl  # noqa: E402
+import json  # noqa: E402
+from pybana import (  # noqa: E402
     Scope,
     ElasticTranslator,
     Kibana,
@@ -14,18 +19,13 @@ from pybana import (
     VegaTranslator,
     VEGA_METRICS,
 )
-from pybana.translators.elastic.buckets import (
+from pybana.translators.elastic.buckets import (  # noqa: E402
     format_from_interval,
     compute_auto_interval,
 )
-from pybana.elastic.elastic_client import ElasticsearchExtClient
-import pytest
-import pytz
-import sys
-
-BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
-sys.path.insert(0, BASE_DIRECTORY)  # NOQA
-
+from pybana.elastic.elastic_client import ElasticsearchExtClient  # noqa: E402
+import pytest  # noqa: E402
+import pytz  # noqa: E402
 
 PYBANA_INDEX = ".kibana_pybana_test"
 ELASTIC1 = elasticsearch.Elasticsearch()
