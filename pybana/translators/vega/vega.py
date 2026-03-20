@@ -25,6 +25,9 @@ __all__ = ("VegaTranslator",)
 
 
 class VegaTranslator:
+    def __init__(self, using=None):
+        self._using = using
+
     def conf(self, state):
         return {
             "$schema": "https://vega.github.io/schema/vega/v5.json",
@@ -998,7 +1001,11 @@ class VegaTranslator:
         return conf
 
     def translate_legacy(self, visualization, response, scope):
-        state = ContextVisualization(visualization=visualization, config=scope.config)
+        state = ContextVisualization(
+            visualization=visualization,
+            config=scope.config,
+            using=self._using,
+        )
 
         ret = self.conf(state)
         ret = self.data(ret, state, response, scope)
@@ -1007,6 +1014,53 @@ class VegaTranslator:
         ret = self.legends(ret, state)
         ret = self.marks(ret, state, response)
         return ret
+
+    def _fix_empty_image_urls(self, marks):
+        """
+        Recursively fix image marks with empty url.
+        Kibana/Lens may store icon references that resolve to empty when rendered
+        server-side (e.g. EUI icon URLs). Replace empty urls with a transparent
+        1x1 pixel to preserve layout without broken image placeholders.
+        """
+        # 1x1 transparent PNG
+        TRANSPARENT_PIXEL = (
+            "data:image/png;base64,"
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        )
+
+        def is_empty_url(url_spec):
+            if url_spec is None:
+                return True
+            if isinstance(url_spec, dict):
+                val = url_spec.get("value")
+                return val is None or (isinstance(val, str) and not val.strip())
+            return False
+
+        def fix_encode_url(encode):
+            if not isinstance(encode, dict):
+                return
+            for phase in ("enter", "update"):
+                if phase not in encode or not isinstance(encode[phase], dict):
+                    continue
+                url_spec = encode[phase].get("url")
+                if is_empty_url(url_spec):
+                    encode[phase]["url"] = {"value": TRANSPARENT_PIXEL}
+                elif isinstance(url_spec, dict) and "field" in url_spec:
+                    # url from data field may be empty at runtime; add fallback
+                    field = url_spec["field"]
+                    encode[phase]["url"] = {
+                        "signal": f"datum['{field}'] || '{TRANSPARENT_PIXEL}'"
+                    }
+
+        for mark in marks or []:
+            if not isinstance(mark, dict):
+                continue
+            if mark.get("type") == "image":
+                encode = mark.get("encode")
+                if encode:
+                    fix_encode_url(encode)
+            elif "marks" in mark:
+                self._fix_empty_image_urls(mark["marks"])
 
     def translate_vega(self, visualization, response, scope):
         ret = hjson.loads(visualization.visState["params"]["spec"])
@@ -1025,6 +1079,11 @@ class VegaTranslator:
         ret.setdefault("width", DEFAULT_WIDTH)
         ret.setdefault("height", DEFAULT_HEIGHT)
         ret.setdefault("padding", DEFAULT_PADDING)
+
+        # Fix image marks with empty url (e.g. Kibana/Lens icons that don't
+        # resolve server-side)
+        self._fix_empty_image_urls(ret.get("marks", []))
+
         return ret
 
     def translate(self, visualization, response, scope):

@@ -22,7 +22,13 @@ class VegaRenderer:
     def __init__(self, vega_bin=VEGA_BIN):
         self.vega_bin = vega_bin
 
-    def to_svg(self, spec):
+    def to_svg(self, spec, auth_headers=None):
+        if isinstance(spec, dict):
+            spec = dict(spec)
+        else:
+            spec = {"spec": spec}
+        if auth_headers is not None:
+            spec["authHeaders"] = auth_headers
         p = subprocess.Popen(
             [self.vega_bin],
             stdout=subprocess.PIPE,

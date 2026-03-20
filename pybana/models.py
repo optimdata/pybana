@@ -4,7 +4,43 @@ import json
 
 from elasticsearch_dsl import Document, Keyword
 
-__all__ = ("BaseDocument", "Config", "IndexPattern", "Visualization", "Dashboard")
+from pybana.kibana_refs import resolve_index_pattern_document_id
+
+__all__ = (
+    "BaseDocument",
+    "Config",
+    "DataView",
+    "IndexPattern",
+    "Visualization",
+    "Dashboard",
+    "get_index_pattern_or_data_view",
+)
+
+
+def get_index_pattern_or_data_view(document_id, index, using=None):
+    """
+    Load an index-pattern or data-view saved object by full Elasticsearch document _id.
+    """
+    if document_id.startswith("data-view:"):
+        return DataView.get(id=document_id, index=index, using=using)
+    return IndexPattern.get(id=document_id, index=index, using=using)
+
+
+class KibanaSavedObjectReferencesMixin(object):
+    """
+    Kibana 8+ stores outbound links in a root-level ``references`` array on saved objects.
+    elasticsearch-dsl drops unknown fields unless we capture them in ``from_es``.
+    """
+
+    @classmethod
+    def from_es(cls, hit, *args, **kwargs):
+        src = hit.get("_source") or {}
+        refs = src.get("references")
+        inst = super(KibanaSavedObjectReferencesMixin, cls).from_es(
+            hit, *args, **kwargs
+        )
+        inst._kibana_references = list(refs) if refs else []
+        return inst
 
 
 class BaseDocument(Document):
@@ -44,43 +80,65 @@ class IndexPattern(BaseDocument):
     json_attrs = ["fields", "fieldFormatMap"]
 
 
-class Search(BaseDocument):
+class DataView(BaseDocument):
+    """
+    Kibana 8+ data view saved object (same role as index-pattern for queries).
+    Stored under ``type: data-view`` with a ``data-view`` property bag in ``_source``.
+    """
+
+    _type = "data-view"
+    json_attrs = ["fields", "fieldFormatMap"]
+
+
+class Search(KibanaSavedObjectReferencesMixin, BaseDocument):
     _type = "search"
 
-    def index(self):
+    def index(self, using=None):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
         """
         search_source = self.search["kibanaSavedObjectMeta"]["searchSourceJSON"]
-        key = json.loads(search_source).get("index")
-        return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index)
+        refs = getattr(self, "_kibana_references", [])
+        doc_id = resolve_index_pattern_document_id(search_source, refs)
+        if not doc_id:
+            raise ValueError(
+                "Could not resolve data source from searchSourceJSON (missing index / references)"
+            )
+        return get_index_pattern_or_data_view(doc_id, self.meta.index, using=using)
 
 
-class Visualization(BaseDocument):
+class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
     _type = "visualization"
     json_attrs = ["visState", "uiStateJSON"]
 
-    def related_search(self):
+    def related_search(self, using=None):
         """
         Returns the search associated to the visualization.
 
         An error is raised if the visualization is not associated to any search.
         """
         return Search.get(
-            id=f"search:{self.visualization.savedSearchId}", index=self.meta.index
+            id=f"search:{self.visualization.savedSearchId}",
+            index=self.meta.index,
+            using=using,
         )
 
-    def index(self):
+    def index(self, using=None):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
         """
         if hasattr(self.visualization, "savedSearchId"):
-            return self.related_search().index()
+            return self.related_search(using=using).index(using=using)
         search_source = self.visualization.kibanaSavedObjectMeta.searchSourceJSON
-        key = json.loads(search_source).get("index")
-        return IndexPattern.get(id=f"index-pattern:{key}", index=self.meta.index)
+        refs = getattr(self, "_kibana_references", [])
+        doc_id = resolve_index_pattern_document_id(search_source, refs)
+        if not doc_id:
+            raise ValueError(
+                "Could not resolve data source from searchSourceJSON (missing index / references)"
+            )
+        return get_index_pattern_or_data_view(doc_id, self.meta.index, using=using)
 
     def filters(self):
         """

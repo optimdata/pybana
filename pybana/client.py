@@ -8,7 +8,7 @@ import elasticsearch_dsl
 
 from pybana.elastic.elastic_client import ElasticsearchExtClient
 
-from .models import Config, Dashboard, IndexPattern, Visualization, Search
+from .models import Config, Dashboard, DataView, IndexPattern, Visualization, Search
 
 __all__ = ("Kibana",)
 
@@ -44,6 +44,7 @@ class Kibana:
         "dashboard": Dashboard,
         "visualization": Visualization,
         "index-pattern": IndexPattern,
+        "data-view": DataView,
         "search": Search,
     }
 

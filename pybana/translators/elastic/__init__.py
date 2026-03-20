@@ -4,6 +4,7 @@ import elasticsearch_dsl
 import hjson
 import json
 
+from pybana.kibana_refs import kibana_saved_object_data_source_dict
 from pybana.translators.elastic.buckets import BucketTranslator, compute_auto_interval
 from pybana.translators.elastic.metrics import MetricTranslator
 from .filter import FilterTranslator
@@ -13,6 +14,9 @@ __all__ = ("ElasticTranslator", "FilterTranslator")
 
 
 class ElasticTranslator:
+    def __init__(self, using=None):
+        self._using = using
+
     def translate_vega(self, visualization, scope):
         def replace_magic_keywords(node):
             if isinstance(node, list):
@@ -91,13 +95,11 @@ class ElasticTranslator:
         )
 
     def translate_legacy(self, visualization, scope):
-        index_pattern = visualization.index()
-        fields = {
-            field["name"]: field
-            for field in json.loads(index_pattern["index-pattern"]["fields"])
-        }
-        index = index_pattern["index-pattern"]["title"]
-        ts = index_pattern["index-pattern"]["timeFieldName"]
+        index_pattern = visualization.index(using=self._using)
+        ip = kibana_saved_object_data_source_dict(index_pattern)
+        fields = {field["name"]: field for field in json.loads(ip["fields"])}
+        index = ip["title"]
+        ts = ip["timeFieldName"]
         search = elasticsearch_dsl.Search(index=index).filter(
             "range",
             **{ts: {"gte": scope.beg.isoformat(), "lte": scope.end.isoformat()}}
