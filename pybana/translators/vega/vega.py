@@ -25,6 +25,9 @@ __all__ = ("VegaTranslator",)
 
 
 class VegaTranslator:
+    def __init__(self, using):
+        self._using = using
+
     def conf(self, state):
         return {
             "$schema": "https://vega.github.io/schema/vega/v5.json",
@@ -998,7 +1001,9 @@ class VegaTranslator:
         return conf
 
     def translate_legacy(self, visualization, response, scope):
-        state = ContextVisualization(visualization=visualization, config=scope.config)
+        state = ContextVisualization(
+            visualization=visualization, config=scope.config, using=self._using
+        )
 
         ret = self.conf(state)
         ret = self.data(ret, state, response, scope)
