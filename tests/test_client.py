@@ -10,14 +10,14 @@ import json  # noqa: E402
 import unittest  # noqa: E402
 from elasticsearch.exceptions import TransportError  # noqa: E402
 from elasticsearch.helpers import scan  # noqa: E402
-from pybana.elastic.elastic_client import (
+from pybana.elastic.elastic_client import (  # noqa: E402
     ElasticsearchExt,
     ScrollsCache,
     _get_scroll_id,
 )  # noqa: E402
 
 # from ..client.base import JSONSerializer
-from pybana.elastic.fixes_for_v8 import (
+from pybana.elastic.fixes_for_v8 import (  # noqa: E402
     fusion_mappings,
     v6_to_v8,
     v8_to_v6,
