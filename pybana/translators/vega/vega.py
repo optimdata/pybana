@@ -25,7 +25,7 @@ __all__ = ("VegaTranslator",)
 
 
 class VegaTranslator:
-    def __init__(self, using=None):
+    def __init__(self, using):
         self._using = using
 
     def conf(self, state):

@@ -14,7 +14,7 @@ __all__ = ("ElasticTranslator", "FilterTranslator")
 
 
 class ElasticTranslator:
-    def __init__(self, using=None):
+    def __init__(self, using):
         self._using = using
 
     def translate_vega(self, visualization, scope):
@@ -70,7 +70,9 @@ class ElasticTranslator:
                 index = data["url"]["index"]
                 body = replace_magic_keywords(data["url"]["body"])
                 body = add_time_zone(body)
-                search = elasticsearch_dsl.Search(index=index).update_from_dict(body)
+                search = elasticsearch_dsl.Search(
+                    index=index, using=self._using
+                ).update_from_dict(body)
                 if data["url"].get("%timefield%"):
                     ts = data["url"]["%timefield%"]
                     search = search.filter(
@@ -83,7 +85,7 @@ class ElasticTranslator:
                         }
                     )
             else:
-                search = elasticsearch_dsl.Search()[:0]
+                search = elasticsearch_dsl.Search(using=self._using)[:0]
             return search
 
         spec = hjson.loads(visualization.visState["params"]["spec"])

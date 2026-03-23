@@ -45,6 +45,7 @@ class KibanaSavedObjectReferencesMixin(object):
 
 class BaseDocument(Document):
     type = Keyword()
+    # _using = None
 
     # List of json attributes.
     json_attrs = []
@@ -93,7 +94,7 @@ class DataView(BaseDocument):
 class Search(KibanaSavedObjectReferencesMixin, BaseDocument):
     _type = "search"
 
-    def index(self, using=None):
+    def index(self, using):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
@@ -112,7 +113,7 @@ class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
     _type = "visualization"
     json_attrs = ["visState", "uiStateJSON"]
 
-    def related_search(self, using=None):
+    def related_search(self, using):
         """
         Returns the search associated to the visualization.
 
@@ -124,7 +125,7 @@ class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
             using=using,
         )
 
-    def index(self, using=None):
+    def index(self, using):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
@@ -156,7 +157,7 @@ class Dashboard(BaseDocument):
     _type = "dashboard"
     json_attrs = ["panelsJSON", "optionsJSON"]
 
-    def visualizations(self, missing="skip", using=None):
+    def visualizations(self, *, using, missing="skip"):
         """
         Does the join automatically by parsing panelsJSON.
 
@@ -175,7 +176,7 @@ class Dashboard(BaseDocument):
             else []
         )
 
-    def searches(self, missing="skip", using=None):
+    def searches(self, *, using, missing="skip"):
         """
         Does the join automatically by parsing panelsJSON.
 
