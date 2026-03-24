@@ -11,6 +11,7 @@ import json
 __all__ = (
     "reference_as_dict",
     "resolve_index_pattern_document_id",
+    "first_input_control_index_pattern_ref",
     "kibana_saved_object_data_source_dict",
 )
 
@@ -76,6 +77,25 @@ def resolve_index_pattern_document_id(search_source_json_str, references):
     ]
     if len(candidates) == 1:
         return doc_id_for_ref(candidates[0])
+    return None
+
+
+def first_input_control_index_pattern_ref(vis_state):
+    """
+    Return the first non-empty ``indexPattern`` from ``input_control_vis`` visState.
+
+    Kibana stores the data view / index-pattern saved object id there (or, in some
+    setups, the index pattern title).
+    """
+    if not vis_state or vis_state.get("type") != "input_control_vis":
+        return None
+    params = vis_state.get("params") or {}
+    for ctrl in params.get("controls") or []:
+        if not isinstance(ctrl, dict):
+            continue
+        ref = ctrl.get("indexPattern")
+        if ref is not None and str(ref).strip() != "":
+            return str(ref).strip()
     return None
 
 
