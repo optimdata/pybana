@@ -28,7 +28,11 @@ class PhraseFilterTranslator(BaseFilterTranslator):
         return "match_phrase"
 
     def params(self, filtr):
-        return {"query": filtr["meta"]["value"]}
+        return (
+            filtr["meta"]["params"]
+            if not filtr["meta"].get("value")
+            else {"query": filtr["meta"]["value"]}
+        )
 
 
 class PhrasesFilterTranslator(PhraseFilterTranslator):
