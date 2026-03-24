@@ -11,11 +11,11 @@ import datetime  # noqa: E402
 import elasticsearch  # noqa: E402
 import elasticsearch_dsl  # noqa: E402
 import json  # noqa: E402
+from pollux.piu_pollux.elastic.renderers.visualization import VegaRenderer
 from pybana import (  # noqa: E402
     Scope,
     ElasticTranslator,
     Kibana,
-    VegaRenderer,
     VegaTranslator,
     VEGA_METRICS,
 )
