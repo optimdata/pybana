@@ -8,6 +8,8 @@ Kibana 7.8+ often uses ``indexRefName`` plus a root-level ``references`` array i
 
 import json
 
+from elasticsearch_dsl.utils import AttrDict
+
 __all__ = (
     "reference_as_dict",
     "resolve_index_pattern_document_id",
@@ -80,14 +82,18 @@ def resolve_index_pattern_document_id(search_source_json_str, references):
     return None
 
 
-def first_input_control_index_pattern_ref(vis_state):
+def first_input_control_index_pattern_ref(vis_state: AttrDict):
     """
     Return the first non-empty ``indexPattern`` from ``input_control_vis`` visState.
 
     Kibana stores the data view / index-pattern saved object id there (or, in some
     setups, the index pattern title).
     """
-    if not vis_state or vis_state.get("type") != "input_control_vis":
+    if isinstance(vis_state, AttrDict):
+        vis_state = vis_state.to_dict()
+    if not vis_state or (
+        "type" in vis_state and vis_state["type"] != "input_control_vis"
+    ):
         return None
     params = vis_state.get("params") or {}
     for ctrl in params.get("controls") or []:

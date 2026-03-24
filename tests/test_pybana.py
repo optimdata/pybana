@@ -11,12 +11,12 @@ import datetime  # noqa: E402
 import elasticsearch  # noqa: E402
 import elasticsearch_dsl  # noqa: E402
 import json  # noqa: E402
-from pollux.piu_pollux.elastic.renderers.visualization import VegaRenderer
 from pybana import (  # noqa: E402
     Scope,
     ElasticTranslator,
     Kibana,
     VegaTranslator,
+    VegaRenderer,
     VEGA_METRICS,
 )
 from pybana.translators.elastic.buckets import (  # noqa: E402
@@ -124,7 +124,7 @@ def client_test(version):
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())
-    assert len(visualizations) == 29
+    assert len(visualizations) == 30
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.visState
     visualization.uiStateJSON
@@ -141,6 +141,10 @@ def client_test(version):
     assert len(list(kibana.searches())) == 1
     search = kibana.search("2139a4e0-fe77-11e9-833a-0fef2d7dd143")
     assert visualization.index(using=elastic).meta.id == index_pattern.meta.id
+    # No index in searchSourceJSON
+    visualization = kibana.visualization("4a23d096-541b-4638-bb4a-441fd9ed5ef4")
+    with pytest.raises(ValueError):
+        visualization.index(using=elastic).meta.id
 
 
 def test_translators_v6():
@@ -295,7 +299,7 @@ def test_elastic_translator_helpers():
 
 
 def test_vega_renderer():
-    renderer = VegaRenderer()
+    renderer = VegaRenderer("fr", "utc")
     renderer.to_svg({"$schema": "https://vega.github.io/schema/vega/v5.json"})
 
 

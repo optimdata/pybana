@@ -117,3 +117,24 @@ def test_kibana_saved_object_data_source_dict_data_view():
 
     d = kibana_saved_object_data_source_dict(_Doc())
     assert d["title"] == "dv"
+
+
+{
+    "_index": ".kibana_pollux_2",
+    "_type": "doc",
+    "_id": "visualization:4a23d096-541b-4638-bb4a-441fd9ed5ef4",
+    "_source": {
+        "visualization": {
+            "title": "TEST IMAGE VIZ 2",
+            "visState": '{"title": "TEST IMAGE VIZ 2", "type": "vega", "params": {"spec": "{\\"$schema\\": \\"https://vega.github.io/schema/vega-lite/v5.json\\", \\"data\\": {\\"values\\": [{\\"x\\": 0.5, \\"y\\": 0.5, \\"url\\": \\"http://localhost:8000/api/files/00000000-0000-0000-0000-000000000003/cdn\\"}]}, \\"mark\\": {\\"type\\": \\"image\\", \\"width\\": 100, \\"height\\": 100}, \\"encoding\\": {\\"x\\": {\\"field\\": \\"x\\", \\"type\\": \\"quantitative\\", \\"scale\\": {\\"domain\\": [0, 1]}}, \\"y\\": {\\"field\\": \\"y\\", \\"type\\": \\"quantitative\\", \\"scale\\": {\\"domain\\": [0, 1]}}, \\"url\\": {\\"field\\": \\"url\\"}}}"}, "aggs": []}',
+            "uiStateJSON": "{}",
+            "description": "",
+            "version": 1,
+            "kibanaSavedObjectMeta": {
+                "searchSourceJSON": '{"query":{"query":"","language":"lucene"},"filter":[]}'
+            },
+        },
+        "type": "visualization",
+        "updated_at": "2024-07-16T08:50:07.501Z",
+    },
+}
