@@ -3,7 +3,7 @@
 import json
 
 from elasticsearch import NotFoundError
-from elasticsearch_dsl import Document, Keyword, Search
+from elasticsearch_dsl import Document, Keyword
 
 from pybana.kibana_refs import (
     first_input_control_index_pattern_ref,
