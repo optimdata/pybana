@@ -4,3 +4,4 @@ hjson==3.0.1
 pendulum==2.1.2
 pytz>=2019.1
 pynumeral==0.1.2
+vl-convert-python==1.9.0.post1

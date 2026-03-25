@@ -2,9 +2,81 @@
 
 import json
 
+from elasticsearch import NotFoundError
 from elasticsearch_dsl import Document, Keyword
 
-__all__ = ("BaseDocument", "Config", "IndexPattern", "Visualization", "Dashboard")
+from pybana.kibana_refs import (
+    first_input_control_index_pattern_ref,
+    resolve_index_pattern_document_id,
+)
+
+__all__ = (
+    "BaseDocument",
+    "Config",
+    "DataView",
+    "IndexPattern",
+    "Visualization",
+    "Dashboard",
+    "get_index_pattern_or_data_view",
+    "get_index_pattern_or_data_view_flexible",
+)
+
+
+def get_index_pattern_or_data_view(document_id, index, using=None):
+    """
+    Load an index-pattern or data-view saved object by full Elasticsearch document _id.
+    """
+    if document_id.startswith("data-view:"):
+        return DataView.get(id=document_id, index=index, using=using)
+    return IndexPattern.get(id=document_id, index=index, using=using)
+
+
+def get_index_pattern_or_data_view_flexible(raw_ref, index, using=None):
+    """
+    Resolve an index-pattern or data-view from a raw ``visState`` reference (id or title).
+
+    Tries ``index-pattern:{raw_ref}`` and ``data-view:{raw_ref}``, then an exact
+    title match on ``index-pattern.title`` / ``data-view.title`` (first hit).
+    """
+    if not raw_ref:
+        return None
+    if raw_ref.startswith("data-view:") or raw_ref.startswith("index-pattern:"):
+        return get_index_pattern_or_data_view(raw_ref, index, using=using)
+    for prefix in ("index-pattern:", "data-view:"):
+        doc_id = prefix + raw_ref
+        try:
+            return get_index_pattern_or_data_view(doc_id, index, using=using)
+        except NotFoundError:
+            pass
+    for obj_type, klass in (("index-pattern", IndexPattern), ("data-view", DataView)):
+        field = "%s.title" % obj_type
+        hits = (
+            Search(index=index, using=using)
+            .filter("term", type=obj_type)
+            .filter("match_phrase", **{field: raw_ref})
+            .extra(size=1)
+            .execute()
+        )
+        if hits.hits:
+            return klass.get(id=hits.hits[0].meta.id, index=index, using=using)
+    return None
+
+
+class KibanaSavedObjectReferencesMixin(object):
+    """
+    Kibana 8+ stores outbound links in a root-level ``references`` array on saved objects.
+    elasticsearch-dsl drops unknown fields unless we capture them in ``from_es``.
+    """
+
+    @classmethod
+    def from_es(cls, hit, *args, **kwargs):
+        src = hit.get("_source") or {}
+        refs = src.get("references")
+        inst = super(KibanaSavedObjectReferencesMixin, cls).from_es(
+            hit, *args, **kwargs
+        )
+        inst._kibana_references = list(refs) if refs else []
+        return inst
 
 
 class BaseDocument(Document):
@@ -45,7 +117,17 @@ class IndexPattern(BaseDocument):
     json_attrs = ["fields", "fieldFormatMap"]
 
 
-class Search(BaseDocument):
+class DataView(BaseDocument):
+    """
+    Kibana 8+ data view saved object (same role as index-pattern for queries).
+    Stored under ``type: data-view`` with a ``data-view`` property bag in ``_source``.
+    """
+
+    _type = "data-view"
+    json_attrs = ["fields", "fieldFormatMap"]
+
+
+class Search(KibanaSavedObjectReferencesMixin, BaseDocument):
     _type = "search"
 
     def index(self, using):
@@ -54,13 +136,16 @@ class Search(BaseDocument):
         search if needed.
         """
         search_source = self.search["kibanaSavedObjectMeta"]["searchSourceJSON"]
-        key = json.loads(search_source).get("index")
-        return IndexPattern.get(
-            id=f"index-pattern:{key}", index=self.meta.index, using=using
-        )
+        refs = getattr(self, "_kibana_references", [])
+        doc_id = resolve_index_pattern_document_id(search_source, refs)
+        if not doc_id:
+            raise ValueError(
+                "Could not resolve data source from searchSourceJSON (missing index / references)"
+            )
+        return get_index_pattern_or_data_view(doc_id, self.meta.index, using=using)
 
 
-class Visualization(BaseDocument):
+class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
     _type = "visualization"
     json_attrs = ["visState", "uiStateJSON"]
 
@@ -82,11 +167,22 @@ class Visualization(BaseDocument):
         search if needed.
         """
         if hasattr(self.visualization, "savedSearchId"):
-            return self.related_search(using).index(using)
+            return self.related_search(using=using).index(using=using)
         search_source = self.visualization.kibanaSavedObjectMeta.searchSourceJSON
-        key = json.loads(search_source).get("index")
-        return IndexPattern.get(
-            id=f"index-pattern:{key}", index=self.meta.index, using=using
+        refs = getattr(self, "_kibana_references", [])
+        doc_id = resolve_index_pattern_document_id(search_source, refs)
+        if doc_id:
+            return get_index_pattern_or_data_view(doc_id, self.meta.index, using=using)
+        raw = first_input_control_index_pattern_ref(self.visState)
+        if raw:
+            resolved = get_index_pattern_or_data_view_flexible(
+                raw, self.meta.index, using=using
+            )
+            if resolved is not None:
+                return resolved
+        raise ValueError(
+            "Could not resolve data source from searchSourceJSON, references, "
+            "or input control visState (missing index / indexPattern)"
         )
 
     def filters(self):
