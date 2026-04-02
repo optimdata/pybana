@@ -5,6 +5,60 @@ from typing import Any, Dict, Optional, Union
 
 __all__ = ("InvalidVegaSpecException", "VegaRenderer")
 
+_HTTP_IMPORT_PLUGIN = """\
+import { momentTZ } from 'moment-timezone'
+import { numeral } from 'numeral'
+
+import 'numeral/locales/fr.js'
+import 'numeral/locales/de.js'
+import 'numeral/locales/es.js'
+import 'numeral/locales/it.js'
+import 'numeral/locales/ja.js'
+import 'numeral/locales/cs.js'
+
+numeral.register('locale', 'ro', {
+  delimiters: {
+    thousands: '.',
+    decimal: ',',
+  },
+  abbreviations: {
+    thousand: 'k',
+    million: 'mil',
+    billion: 'mld',
+    trillion: 't',
+  },
+  ordinal: function () {
+    return '-'
+  },
+  currency: {
+    symbol: 'RON',
+  },
+})
+
+numeral.register('format', 'duration', {
+  regexps: {
+    format: /(!)/,
+  },
+  format: value => moment.duration(value, 'seconds').humanize(),
+  unformat: () => 0,
+})
+
+expressionFunction('momentFormat', (date, fmt) =>
+  momentTZ(date).format(fmt),
+)
+expressionFunction('numeralFormat', (number, fmt) =>
+  numeral(number).format(fmt),
+)
+expressionFunction('inusetimezoneoffset', date =>
+  momentTZ.defaultZone ? momentTZ.defaultZone.utcOffset(date) : 0,
+)
+expressionFunction('kibanaSetTimeFilter', () => null)
+"""
+
+vlc.configure(
+    vega_plugins=[_HTTP_IMPORT_PLUGIN],
+    plugin_import_domains=["esm.sh"],
+)
 
 class InvalidVegaSpecException(Exception):
     def __init__(self, message, vega_cli_traceback, *args, **kwargs):
