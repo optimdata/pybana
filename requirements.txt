@@ -4,4 +4,4 @@ hjson==3.0.1
 pendulum==2.1.2
 pytz>=2019.1
 pynumeral==0.1.2
-vl-convert-python==1.9.0.post1
+"git+https://github.com/vega/vl-convert.git@410ad98f6c0cddbeaa7ca64a38a75bf12fbb61d4#egg=vl-convert-python&subdirectory=vl-convert-python"
