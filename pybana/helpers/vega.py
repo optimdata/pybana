@@ -15,8 +15,9 @@ class InvalidVegaSpecException(Exception):
     def __init__(self, message, vega_cli_traceback, *args, **kwargs):
         super().__init__(self, message, *args, **kwargs)
         self.vega_cli_traceback = vega_cli_traceback
+        print(vega_cli_traceback)
 
-VEGA_BIN = os.path.join(os.path.dirname(__file__), "./bin/vega-cli")
+VEGA_BIN = os.path.join(os.path.dirname(__file__), "../../bin/vega-cli.js")
 
 LANGUAGE_TO_FORMAT_LOCALE: Dict[str, str] = {
     "fr": "fr-FR",
@@ -113,7 +114,7 @@ class VegaRenderer:
         except Exception as exc:
             # TODO : Update vl-convert-python when release is greater than > 1.9.0.post1
             capture_exception(exc)
-            return self.fallback_renderer.to_svg(spec)
+            return self.fallback_renderer.to_svg({"spec": spec})
 
     def to_svg(self, spec):
         svg_str = self._to_svg(spec)
@@ -141,6 +142,7 @@ class FallbackVegaRenderer:
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
+        print(json.dumps(spec))
         result = p.communicate(input=json.dumps(spec).encode())
         if result[0]:
             return result[0].decode()
