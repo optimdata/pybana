@@ -17,6 +17,7 @@ class InvalidVegaSpecException(Exception):
         self.vega_cli_traceback = vega_cli_traceback
         print(vega_cli_traceback)
 
+
 VEGA_BIN = os.path.join(os.path.dirname(__file__), "../../bin/vega-cli.js")
 
 LANGUAGE_TO_FORMAT_LOCALE: Dict[str, str] = {
