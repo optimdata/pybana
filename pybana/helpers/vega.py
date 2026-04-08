@@ -15,7 +15,6 @@ class InvalidVegaSpecException(Exception):
     def __init__(self, message, vega_cli_traceback, *args, **kwargs):
         super().__init__(self, message, *args, **kwargs)
         self.vega_cli_traceback = vega_cli_traceback
-        print(vega_cli_traceback)
 
 
 VEGA_BIN = os.path.join(os.path.dirname(__file__), "../../bin/vega-cli.js")
@@ -143,7 +142,6 @@ class FallbackVegaRenderer:
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        print(json.dumps(spec))
         result = p.communicate(input=json.dumps(spec).encode())
         if result[0]:
             return result[0].decode()
