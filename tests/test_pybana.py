@@ -107,7 +107,7 @@ def test_client_v8():
     client_test("v8")
 
 
-def client_test(version):
+def init_kibana_client(version):
     kibana = Kibana(index=PYBANA_INDEX, using=version)
     elastic = ELASTICS[version]
     elastic.indices.delete(f"{PYBANA_INDEX}*")
@@ -116,6 +116,11 @@ def client_test(version):
     kibana.init_config()
     kibana.init_config()
     assert kibana.config()
+    return elastic, kibana
+
+
+def client_test(version):
+    elastic, kibana = init_kibana_client(version)
     assert len(list(kibana.index_patterns())) == 1
     index_pattern = kibana.index_pattern("6c172f80-fb13-11e9-84e4-078763638bf3")
     index_pattern.fields
@@ -124,7 +129,7 @@ def client_test(version):
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())
-    assert len(visualizations) == 30
+    assert len(visualizations) == 31
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.visState
     visualization.uiStateJSON
@@ -301,6 +306,26 @@ def test_elastic_translator_helpers():
 def test_vega_renderer():
     renderer = VegaRenderer("fr", "utc")
     renderer.to_svg({"$schema": "https://vega.github.io/schema/vega/v5.json"})
+
+
+def test_vega_renderer_momentFormat_v6():
+    vega_renderer_momentFormat("v6")
+
+
+def test_vega_renderer_momentFormat_v8():
+    vega_renderer_momentFormat("v8")
+
+
+def vega_renderer_momentFormat(version):
+    elastic, kibana = init_kibana_client(version)
+
+    # Test renderer MomentFormat
+    visualization = kibana.visualization("33788540-f67f-11ee-ba56-1101ab5c82ed")
+
+    spec = json.loads(visualization.visState["params"]["spec"])
+
+    renderer = VegaRenderer("fr", "utc")
+    renderer.to_svg(spec)
 
 
 def test_datasweet():
