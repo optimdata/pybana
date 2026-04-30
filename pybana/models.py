@@ -203,12 +203,12 @@ class Dashboard(BaseDocument):
 
     def visualizations(self, *, using, missing="skip"):
         """
-        Does the join automatically by parsing panelsJSON.
+        Does the join automatically by parsing references.
 
         :param str missing: Check https://elasticsearch-dsl.readthedocs.io/en/latest/api.html#elasticsearch_dsl.Document.mget
         :param str using: connection alias to use, defaults to ``'default'``
         """
-        panels = [panel for panel in self.panelsJSON if panel.type == "visualization"]
+        panels = [panel for panel in self.references if panel.type == "visualization"]
         return (
             Visualization.mget(
                 docs=["visualization:" + panel["id"] for panel in panels],
@@ -222,12 +222,12 @@ class Dashboard(BaseDocument):
 
     def searches(self, *, using, missing="skip"):
         """
-        Does the join automatically by parsing panelsJSON.
+        Does the join automatically by parsing references.
 
         :param str missing: Check https://elasticsearch-dsl.readthedocs.io/en/latest/api.html#elasticsearch_dsl.Document.mget
         :param str using: connection alias to use, defaults to ``'default'``
         """
-        panels = [panel for panel in self.panelsJSON if panel.type == "search"]
+        panels = [panel for panel in self.references if panel.type == "search"]
         return (
             Search.mget(
                 docs=["search:" + panel["id"] for panel in panels],
