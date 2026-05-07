@@ -341,6 +341,9 @@
                 "namespace": {
                     "type": "keyword"
                 },
+                "namespaces": {
+                    "type": "keyword"
+                },
                 "search": {
                     "properties": {
                         "columns": {
