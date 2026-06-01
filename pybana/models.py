@@ -161,7 +161,7 @@ class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
             using=using,
         )
 
-    def index(self, using):
+    def index(self, using, raise_error=True):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
@@ -180,10 +180,12 @@ class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
             )
             if resolved is not None:
                 return resolved
-        raise ValueError(
-            "Could not resolve data source from searchSourceJSON, references, "
-            "or input control visState (missing index / indexPattern)"
-        )
+        if raise_error:
+            raise ValueError(
+                "Could not resolve data source from searchSourceJSON, references, "
+                "or input control visState (missing index / indexPattern)"
+            )
+        return
 
     def filters(self):
         """
