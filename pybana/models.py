@@ -3,7 +3,7 @@
 import json
 
 from elasticsearch import NotFoundError
-from elasticsearch_dsl import Document, Keyword
+from elasticsearch_dsl import Document, Keyword, Search as EsSearch
 
 from pybana.kibana_refs import (
     first_input_control_index_pattern_ref,
@@ -51,7 +51,7 @@ def get_index_pattern_or_data_view_flexible(raw_ref, index, using=None):
     for obj_type, klass in (("index-pattern", IndexPattern), ("data-view", DataView)):
         field = "%s.title" % obj_type
         hits = (
-            Search(index=index, using=using)
+            EsSearch(index=index, using=using)
             .filter("term", type=obj_type)
             .filter("match_phrase", **{field: raw_ref})
             .extra(size=1)
