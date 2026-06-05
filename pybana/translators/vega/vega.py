@@ -31,11 +31,15 @@ class VegaTranslator:
     def conf(self, state):
         return {
             "$schema": "https://vega.github.io/schema/vega/v5.json",
-            "width": DEFAULT_PIE_WIDTH
-            if state.type() == "pie"
-            else DEFAULT_GAUGE_WIDTH
-            if state.type() in ["gauge", "goal"]
-            else DEFAULT_WIDTH,
+            "width": (
+                DEFAULT_PIE_WIDTH
+                if state.type() == "pie"
+                else (
+                    DEFAULT_GAUGE_WIDTH
+                    if state.type() in ["gauge", "goal"]
+                    else DEFAULT_WIDTH
+                )
+            ),
             "height": DEFAULT_HEIGHT,
             "padding": DEFAULT_PADDING,
         }
@@ -187,9 +191,11 @@ class VegaTranslator:
                     )
                 tooltip = {
                     childpoint.get("x_label", "x"): childpoint["x"],
-                    childpoint["metric"]: self._format_duration(y)
-                    if self._is_duration_bucket(state, metric_agg, metric)
-                    else y,
+                    childpoint["metric"]: (
+                        self._format_duration(y)
+                        if self._is_duration_bucket(state, metric_agg, metric)
+                        else y
+                    ),
                 }
                 if childpoint["group"]:
                     tooltip["group"] = childpoint["group"]
@@ -248,9 +254,11 @@ class VegaTranslator:
                         "groupby": ["x"],
                         "field": state.y(ax),
                         "as": [state.y(ax) + "|0", state.y(ax) + "|1"],
-                        "offset": "normalize"
-                        if ax["scale"]["mode"] == "percentage"
-                        else "zero",
+                        "offset": (
+                            "normalize"
+                            if ax["scale"]["mode"] == "percentage"
+                            else "zero"
+                        ),
                     }
                 ]
             elif state.metrics_stacked(ax):
@@ -261,9 +269,11 @@ class VegaTranslator:
                         "field": state.y(ax),
                         "as": [state.y(ax) + "|0", state.y(ax) + "|1"],
                         "sort": {"field": "metric"},
-                        "offset": "normalize"
-                        if ax["scale"]["mode"] == "percentage"
-                        else "zero",
+                        "offset": (
+                            "normalize"
+                            if ax["scale"]["mode"] == "percentage"
+                            else "zero"
+                        ),
                     }
                 ]
 
@@ -376,9 +386,9 @@ class VegaTranslator:
             else:
                 domain = {
                     "data": "table",
-                    "field": state.y(ax) + "|1"
-                    if state.stacked_applied(ax)
-                    else state.y(ax),
+                    "field": (
+                        state.y(ax) + "|1" if state.stacked_applied(ax) else state.y(ax)
+                    ),
                 }
                 nice = True
                 zero = True
@@ -480,9 +490,11 @@ class VegaTranslator:
                 {
                     "fill": "groupcolor",
                     "title": "",
-                    "columns": 1
-                    if state._state["params"]["legendPosition"] in ("left", "right")
-                    else 10,
+                    "columns": (
+                        1
+                        if state._state["params"]["legendPosition"] in ("left", "right")
+                        else 10
+                    ),
                     "orient": state._state["params"]["legendPosition"],
                 }
             ]
@@ -491,9 +503,11 @@ class VegaTranslator:
                 {
                     "fill": "metriccolor",
                     "title": "",
-                    "columns": 1
-                    if state._state["params"]["legendPosition"] in ("left", "right")
-                    else 10,
+                    "columns": (
+                        1
+                        if state._state["params"]["legendPosition"] in ("left", "right")
+                        else 10
+                    ),
                     "orient": state._state["params"]["legendPosition"],
                 }
             ]
@@ -521,9 +535,9 @@ class VegaTranslator:
                         "y": {"signal": "height / 2"},
                         "startAngle": {"field": "startAngle"},
                         "endAngle": {"field": "endAngle"},
-                        "innerRadius": {"signal": "width * .35"}
-                        if donut
-                        else {"value": 0},
+                        "innerRadius": (
+                            {"signal": "width * .35"} if donut else {"value": 0}
+                        ),
                         "outerRadius": {"signal": "width / 2"},
                         **(
                             {"tooltip": {"field": "tooltip"}}
@@ -729,9 +743,11 @@ class VegaTranslator:
                     },
                     "update": {
                         "text": {
-                            "signal": "format(mainValue*100/(maxValue - minValue), '.0f') + '%'"
-                            if percentage_mode
-                            else f"'{formatted_value}'"
+                            "signal": (
+                                "format(mainValue*100/(maxValue - minValue), '.0f') + '%'"
+                                if percentage_mode
+                                else f"'{formatted_value}'"
+                            )
                         },
                         "y": {"signal": "centerY - 14*fontFactor"},
                         "fontSize": {"signal": "fontFactor*18"},
@@ -832,11 +848,11 @@ class VegaTranslator:
         x2 = (
             "axis"
             if state.multi_axis()
-            else "group"
-            if state.groups_side_by_side(ax)
-            else "metric"
-            if state.metrics_side_by_side(ax)
-            else "x"
+            else (
+                "group"
+                if state.groups_side_by_side(ax)
+                else "metric" if state.metrics_side_by_side(ax) else "x"
+            )
         )
         ret = [
             {
@@ -933,9 +949,11 @@ class VegaTranslator:
                         "x": {"scale": "xscale", "field": "x"},
                         "y": {
                             "scale": ax["id"],
-                            "field": state.y(ax) + "|1"
-                            if state.stacked_applied(ax)
-                            else state.y(ax),
+                            "field": (
+                                state.y(ax) + "|1"
+                                if state.stacked_applied(ax)
+                                else state.y(ax)
+                            ),
                         },
                         "stroke": {"scale": stylescale, "field": stackgroupfield},
                         "strokeWidth": strokesizes,
@@ -952,9 +970,11 @@ class VegaTranslator:
                         "x": {"scale": "xscale", "field": "x"},
                         "y": {
                             "scale": ax["id"],
-                            "field": state.y(ax) + "|1"
-                            if state.stacked_applied(ax)
-                            else state.y(ax),
+                            "field": (
+                                state.y(ax) + "|1"
+                                if state.stacked_applied(ax)
+                                else state.y(ax)
+                            ),
                         },
                         "fill": {"scale": stylescale, "field": stackgroupfield},
                         "size": circlesizes,
