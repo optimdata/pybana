@@ -89,11 +89,7 @@ class Kibana:
             # seeded config may exist for another patch version, so fallback to
             # any config document for the same major version.
             major_version = config_id.split(":")[-1].split(".")[0]
-            hits = (
-                self.objects("config", using=using)
-                .extra(size=50)
-                .execute()
-            )
+            hits = self.objects("config", using=using).extra(size=50).execute()
             for hit in hits:
                 hit_id = hit.meta.id
                 if hit_id.startswith(f"config:{major_version}."):
