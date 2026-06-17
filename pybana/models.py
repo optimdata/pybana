@@ -130,7 +130,7 @@ class DataView(BaseDocument):
 class Search(KibanaSavedObjectReferencesMixin, BaseDocument):
     _type = "search"
 
-    def index(self, using):
+    def index(self, using, raise_error=True):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
@@ -139,9 +139,11 @@ class Search(KibanaSavedObjectReferencesMixin, BaseDocument):
         refs = getattr(self, "_kibana_references", [])
         doc_id = resolve_index_pattern_document_id(search_source, refs)
         if not doc_id:
-            raise ValueError(
-                "Could not resolve data source from searchSourceJSON (missing index / references)"
-            )
+            if raise_error:
+                raise ValueError(
+                    "Could not resolve data source from searchSourceJSON (missing index / references)"
+                )
+            return None
         return get_index_pattern_or_data_view(doc_id, self.meta.index, using=using)
 
 
@@ -167,7 +169,9 @@ class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
         search if needed.
         """
         if hasattr(self.visualization, "savedSearchId"):
-            return self.related_search(using=using).index(using=using)
+            return self.related_search(using=using).index(
+                using=using, raise_error=raise_error
+            )
         search_source = self.visualization.kibanaSavedObjectMeta.searchSourceJSON
         refs = getattr(self, "_kibana_references", [])
         doc_id = resolve_index_pattern_document_id(search_source, refs)
@@ -185,7 +189,7 @@ class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
                 "Could not resolve data source from searchSourceJSON, references, "
                 "or input control visState (missing index / indexPattern)"
             )
-        return
+        return None
 
     def filters(self):
         """

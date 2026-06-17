@@ -81,7 +81,24 @@ class Kibana:
         """
         Return the config associated to the current version of elastic
         """
-        return self._get(Config, self.config_id(using), using=using)
+        config_id = self.config_id(using)
+        try:
+            return self._get(Config, config_id, using=using)
+        except NotFoundError:
+            # Kibana config ids are versioned (e.g. config:8.18.4). In tests the
+            # seeded config may exist for another patch version, so fallback to
+            # any config document for the same major version.
+            major_version = config_id.split(":")[-1].split(".")[0]
+            hits = (
+                self.objects("config", using=using)
+                .extra(size=50)
+                .execute()
+            )
+            for hit in hits:
+                hit_id = hit.meta.id
+                if hit_id.startswith(f"config:{major_version}."):
+                    return self._get(Config, hit_id, using=using)
+            raise
 
     def is_v8(self, using=None):
         elastic = self.get_es(using)
