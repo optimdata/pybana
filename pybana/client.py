@@ -6,7 +6,7 @@ import os
 from elasticsearch import NotFoundError, Elasticsearch
 import elasticsearch_dsl
 
-from pybana.elastic_client.elastic_client import ElasticsearchExtClient
+from pybana.elastic.elastic_client import ElasticsearchExtClient
 
 from .models import Config, Dashboard, IndexPattern, Visualization, Search
 

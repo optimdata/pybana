@@ -11,10 +11,10 @@ from elasticsearch.helpers import scan
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
-from pybana.elastic_client.elastic_client import ElasticsearchExt, ScrollsCache, _get_scroll_id
+from pybana.elastic.elastic_client import ElasticsearchExt, ScrollsCache, _get_scroll_id
 
 # from ..client.base import JSONSerializer
-from pybana.elastic_client.fixes_for_v8 import fusion_mappings, v6_to_v8, v8_to_v6
+from pybana.elastic.fixes_for_v8 import fusion_mappings, v6_to_v8, v8_to_v6
 
 
 class TestV8ToV6Case(unittest.TestCase):

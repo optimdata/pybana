@@ -25,7 +25,7 @@ from pybana.translators.elastic.buckets import (
     format_from_interval,
     compute_auto_interval,
 )
-from pybana.elastic_client.elastic_client import ElasticsearchExtClient
+from pybana.elastic.elastic_client import ElasticsearchExtClient
 
 
 PYBANA_INDEX = ".kibana_pybana_test"
