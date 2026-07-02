@@ -3,7 +3,7 @@
 import json
 from elasticsearch_dsl import Search
 
-from pybana.elastic.elastic_client import ElasticsearchExtClient
+from pybana.elastic_client.elastic_client import ElasticsearchExtClient
 
 
 def dumpindex(elastic, index, fn):
