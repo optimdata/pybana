@@ -116,7 +116,19 @@ class DatasweetMetric(BaseMetric):
         pass
 
 
-class TopHitsMetric(BaseMetric):
+class BaseTopMetric(BaseMetric):
+    def translate(self, proxy, agg, state, field):
+        params = agg["params"]
+        proxy.metric(
+            agg["id"],
+            self.aggtype,
+            sort={params["sortField"]: {"order": params["sortOrder"]}},
+            size=params["size"],
+            _source=agg["params"]["field"],
+        )
+
+
+class TopHitsMetric(BaseTopMetric):
     """
     Translator for top_hits metric.
 
@@ -127,15 +139,17 @@ class TopHitsMetric(BaseMetric):
 
     aggtype = "top_hits"
 
-    def translate(self, proxy, agg, state, field):
-        params = agg["params"]
-        proxy.metric(
-            agg["id"],
-            "top_hits",
-            sort={params["sortField"]: {"order": params["sortOrder"]}},
-            size=params["size"],
-            _source=agg["params"]["field"],
-        )
+
+class TopMetricsMetric(BaseTopMetric):
+    """
+    Translator for top_metrics metric.
+
+    Careful, this metric is partially supported:
+    - date fields are not handled.
+    - scripted fields are not handled.
+    """
+
+    aggtype = "top_metrics"
 
 
 TRANSLATORS = {
@@ -153,6 +167,7 @@ TRANSLATORS = {
         StdDevMetric,
         SumMetric,
         TopHitsMetric,
+        TopMetricsMetric,
     )
 }
 

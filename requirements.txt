@@ -1,5 +1,5 @@
-elasticsearch==6.4.0
-elasticsearch-dsl==6.4.0
+elasticsearch==8.17.1
+elasticsearch-dsl==8.17.1
 hjson==3.0.1
 pendulum==2.1.2
 pytz>=2019.1

@@ -160,9 +160,7 @@ class RangeBucket(BaseBucket):
         }
 
 
-class TermsBucket(BaseBucket):
-    aggtype = "terms"
-
+class BaseTermsBucket(BaseBucket):
     def translate(self, agg, state, context, field):
         orderby = agg["params"]["orderBy"]
         aggs = {agg["id"]: agg for agg in state["aggs"]}
@@ -178,6 +176,14 @@ class TermsBucket(BaseBucket):
         }
 
 
+class TermsBucket(BaseBucket):
+    aggtype = "terms"
+
+
+class SignificantTermsBucket(BaseBucket):
+    aggtype = "significant_terms"
+
+
 TRANSLATORS = {
     translator.aggtype: translator
     for translator in (
@@ -187,6 +193,7 @@ TRANSLATORS = {
         HistogramBucket,
         RangeBucket,
         TermsBucket,
+        SignificantTermsBucket,
     )
 }
 
