@@ -160,7 +160,9 @@ class RangeBucket(BaseBucket):
         }
 
 
-class BaseTermsBucket(BaseBucket):
+class TermsBucket(BaseBucket):
+    aggtype = "terms"
+
     def translate(self, agg, state, context, field):
         orderby = agg["params"]["orderBy"]
         aggs = {agg["id"]: agg for agg in state["aggs"]}
@@ -174,10 +176,6 @@ class BaseTermsBucket(BaseBucket):
             **get_field_arg(agg, field),
             **super().translate(agg, state, context, field),
         }
-
-
-class TermsBucket(BaseBucket):
-    aggtype = "terms"
 
 
 class SignificantTermsBucket(BaseBucket):
