@@ -10,7 +10,20 @@ from pybana.translators.elastic.metrics import MetricTranslator
 from .filter import FilterTranslator
 from .utils import SearchListProxy
 
+
 __all__ = ("ElasticTranslator", "FilterTranslator")
+
+
+class SignificantTerms(elasticsearch_dsl.query.Terms):
+    name = "significant_terms"
+
+
+class TopMetrics(elasticsearch_dsl.aggs.TopHits):
+    name = "top_metrics"
+
+
+elasticsearch_dsl.query.Query._classes[SignificantTerms.name] = SignificantTerms
+elasticsearch_dsl.aggs.Agg._classes[TopMetrics.name] = TopMetrics
 
 
 class ElasticTranslator:

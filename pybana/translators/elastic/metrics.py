@@ -131,10 +131,32 @@ class TopHitsMetric(BaseMetric):
         params = agg["params"]
         proxy.metric(
             agg["id"],
-            "top_hits",
+            self.aggtype,
             sort={params["sortField"]: {"order": params["sortOrder"]}},
             size=params["size"],
             _source=agg["params"]["field"],
+        )
+
+
+class TopMetricsMetric(BaseMetric):
+    """
+    Translator for top_metrics metric.
+
+    Careful, this metric is partially supported:
+    - date fields are not handled.
+    - scripted fields are not handled.
+    """
+
+    aggtype = "top_metrics"
+
+    def translate(self, proxy, agg, state, field):
+        params = agg["params"]
+        proxy.metric(
+            agg["id"],
+            self.aggtype,
+            sort={params["sortField"]: {"order": params["sortOrder"]}},
+            size=params["size"],
+            metrics={"field": agg["params"]["field"]},
         )
 
 
@@ -153,6 +175,7 @@ TRANSLATORS = {
         StdDevMetric,
         SumMetric,
         TopHitsMetric,
+        TopMetricsMetric,
     )
 }
 

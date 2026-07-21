@@ -109,6 +109,23 @@ class TopHitsMetric(BaseMetric):
         return ", ".join(map(str, values))
 
 
+class TopMetricsMetric(BaseMetric):
+    """
+    Metric for top_metrics.
+    """
+
+    aggtype = "top_metrics"
+
+    def contribute(self, agg, bucket, response):
+        hit = bucket[agg["id"]]["top"][0]
+        value = (
+            hit["metrics"][agg["params"]["field"]]
+            if agg["params"]["field"] in hit["metrics"]
+            else None
+        )
+        return value
+
+
 VEGA_METRICS = {
     metric.aggtype: metric
     for metric in [
@@ -122,5 +139,6 @@ VEGA_METRICS = {
         StdDevMetric,
         SumMetric,
         TopHitsMetric,
+        TopMetricsMetric,
     ]
 }
