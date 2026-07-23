@@ -178,6 +178,16 @@ class TermsBucket(BaseBucket):
         }
 
 
+class SignificantTermsBucket(BaseBucket):
+    aggtype = "significant_terms"
+
+    def translate(self, agg, state, context, field):
+        ret = agg["params"]
+        if field and field.get("scripted"):
+            ret["valueType"] = field["type"]
+        return ret
+
+
 TRANSLATORS = {
     translator.aggtype: translator
     for translator in (
@@ -187,6 +197,7 @@ TRANSLATORS = {
         HistogramBucket,
         RangeBucket,
         TermsBucket,
+        SignificantTermsBucket,
     )
 }
 

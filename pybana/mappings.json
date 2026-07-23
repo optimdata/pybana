@@ -78,6 +78,18 @@
                         }
                     }
                 },
+                "coreMigrationVersion": {
+                    "type": "text",
+                    "fields": {
+                        "keyword": {
+                            "type": "keyword",
+                            "ignore_above": 256
+                        }
+                    }
+                },
+                "created_at": {
+                    "type": "date"
+                },
                 "dashboard": {
                     "properties": {
                         "description": {
@@ -239,6 +251,9 @@
                             "type": "long"
                         }
                     }
+                },
+                "managed": {
+                    "type": "boolean"
                 },
                 "map": {
                     "properties": {
@@ -455,6 +470,15 @@
                 },
                 "type": {
                     "type": "keyword"
+                },
+                "typeMigrationVersion": {
+                    "type": "text",
+                    "fields": {
+                        "keyword": {
+                            "type": "keyword",
+                            "ignore_above": 256
+                        }
+                    }
                 },
                 "updated_at": {
                     "type": "date"
