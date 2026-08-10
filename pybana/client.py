@@ -29,9 +29,7 @@ VISUALIZATION_MAPPING_PROPERTIES = {
         "properties": {
             "searchSourceJSON": {
                 "type": "text",
-                "fields": {
-                    "keyword": {"type": "keyword", "ignore_above": 256}
-                },
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
             }
         }
     },
