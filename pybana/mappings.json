@@ -571,12 +571,24 @@
                 "visualization": {
                     "properties": {
                         "description": {
-                            "type": "text"
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
+                            }
                         },
                         "kibanaSavedObjectMeta": {
                             "properties": {
                                 "searchSourceJSON": {
-                                    "type": "text"
+                                    "type": "text",
+                                    "fields": {
+                                        "keyword": {
+                                            "type": "keyword",
+                                            "ignore_above": 256
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -584,16 +596,34 @@
                             "type": "keyword"
                         },
                         "title": {
-                            "type": "text"
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
+                            }
                         },
                         "uiStateJSON": {
-                            "type": "text"
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
+                            }
                         },
                         "version": {
-                            "type": "integer"
+                            "type": "long"
                         },
                         "visState": {
-                            "type": "text"
+                            "type": "text",
+                            "fields": {
+                                "keyword": {
+                                    "type": "keyword",
+                                    "ignore_above": 256
+                                }
+                            }
                         }
                     }
                 }
