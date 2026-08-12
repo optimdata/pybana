@@ -9,7 +9,6 @@ sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
 from pybana.client import Kibana, VISUALIZATION_MAPPING_PROPERTIES  # noqa: E402
 
-
 INCOMPLETE_ANALYTICS_MAPPING = {
     ".kibana_wendt_analytics_1": {
         "mappings": {
