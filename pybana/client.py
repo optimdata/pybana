@@ -22,6 +22,28 @@ DEFAULT_CONFIG = {
     "defaultIndex": None,
 }
 
+# Fields required to search visualizations by type (visState) in synoptics / API.
+# Kibana 8 ``.kibana_*_analytics`` indices often omit these under ``dynamic: false``.
+VISUALIZATION_MAPPING_PROPERTIES = {
+    "kibanaSavedObjectMeta": {
+        "properties": {
+            "searchSourceJSON": {
+                "type": "text",
+                "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+            }
+        }
+    },
+    "savedSearchId": {"type": "keyword"},
+    "uiStateJSON": {
+        "type": "text",
+        "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+    },
+    "visState": {
+        "type": "text",
+        "fields": {"keyword": {"type": "keyword", "ignore_above": 256}},
+    },
+}
+
 
 class Kibana:
     """
@@ -108,14 +130,79 @@ class Kibana:
         elastic = self.get_es(using)
         mappingsfn = os.path.join(os.path.dirname(__file__), "mappings.json")
         suffix = 1
+        created = False
         while not elastic.indices.exists(self._index):
             index = f"{self._index}_{suffix}"
             if not elastic.indices.exists(index):
                 with open(mappingsfn) as fd:
                     elastic.indices.create(index, body=json.load(fd))
                     elastic.indices.put_alias(index=index, name=self._index)
+                created = True
                 break
             suffix += 1
+        # Existing Kibana 8 analytics indices may lack searchable visState; fix them.
+        self.ensure_visualization_mapping(using=using, reindex=not created)
+
+    def _visualization_properties_from_mapping(self, index_mapping):
+        """
+        Return visualization.properties from a get_mapping response entry.
+        """
+        mappings = index_mapping.get("mappings", {})
+        if "doc" in mappings:
+            properties = mappings["doc"].get("properties", {})
+        else:
+            properties = mappings.get("properties", {})
+        return properties.get("visualization", {}).get("properties", {})
+
+    def visualization_mapping_needs_update(self, using=None):
+        """
+        True if visualization.visState is missing from the index mapping.
+        """
+        elastic = self.get_es(using)
+        if not elastic.indices.exists(self._index):
+            return False
+        mappings = elastic.indices.get_mapping(index=self._index)
+        for index_mapping in mappings.values():
+            visu_props = self._visualization_properties_from_mapping(index_mapping)
+            if "visState" not in visu_props:
+                return True
+        return False
+
+    def ensure_visualization_mapping(self, using=None, reindex=True):
+        """
+        Ensure visualization fields (especially visState) are mapped and searchable.
+
+        Kibana 8 ``.kibana_*_analytics`` indices often define visualization with
+        ``dynamic: false`` and omit ``visState`` / ``uiStateJSON``, which breaks
+        type-filtered listing used by synoptics iframes.
+
+        :param reindex: If True, reindex existing visualization docs so newly
+            mapped fields become searchable (required after put_mapping).
+        :return: True if the mapping was updated, False if already complete.
+        """
+        elastic = self.get_es(using)
+        if not elastic.indices.exists(self._index):
+            return False
+        if not self.visualization_mapping_needs_update(using=using):
+            return False
+
+        body = {
+            "properties": {
+                "visualization": {"properties": VISUALIZATION_MAPPING_PROPERTIES}
+            }
+        }
+        # doc_type is required by the client wrapper; stripped for ES 7+.
+        elastic.indices.put_mapping("doc", body, index=self._index)
+
+        if reindex:
+            elastic.update_by_query(
+                index=self._index,
+                body={"query": {"term": {"type": "visualization"}}},
+                conflicts="proceed",
+                refresh=True,
+                wait_for_completion=True,
+            )
+        return True
 
     def init_config(self, using=None):
         """
