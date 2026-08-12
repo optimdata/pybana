@@ -69,11 +69,11 @@ def ds_if(cond, yes, no):
             out.append(
                 ds_if(
                     cond_item,
-                    yes
-                    if not isinstance(yes, list)
-                    else yes[i]
-                    if len(yes) > i
-                    else None,
+                    (
+                        yes
+                        if not isinstance(yes, list)
+                        else yes[i] if len(yes) > i else None
+                    ),
                     no if not isinstance(no, list) else no[i] if len(no) > i else None,
                 )
             )
@@ -149,9 +149,9 @@ def datasweet_eval(expr, bucket):
                 val = (
                     value["std_deviation"]
                     if "std_deviation" in value
-                    else value["values"]["50.0"]
-                    if "values" in value
-                    else value["value"]
+                    else (
+                        value["values"]["50.0"] if "values" in value else value["value"]
+                    )
                 )
             scope[f"agg{key}"] = float("nan") if val is None else val
     try:

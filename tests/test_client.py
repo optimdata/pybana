@@ -194,7 +194,7 @@ class TestV6ToV8Case(unittest.TestCase):
             ), f"FAILED: {test_name}"
 
     def test_fix_dynamic_template(self):
-        for (origin, expected, title) in [
+        for origin, expected, title in [
             (None, None, "none"),
             ({"a": 1}, {"a": 1}, "case 0"),
             ({"a": {}}, {"a": {}}, "case 1"),
@@ -256,7 +256,7 @@ class TestV6ToV8Case(unittest.TestCase):
             assert fixed == expected, title
 
     def test_fix_dynamic_templates(self):
-        for (origin, expected, title) in [
+        for origin, expected, title in [
             (None, None, "none"),
             ([{"a": {}}], [{"a": {}}], "case 1"),
             ({"a": {}}, {"a": {}}, "case 2"),
@@ -293,7 +293,7 @@ class TestV6ToV8Case(unittest.TestCase):
             assert fixed == expected, title
 
     def test_fix_mappings(self):
-        for (origin, expected, title) in [
+        for origin, expected, title in [
             (None, {}, "none"),
             (
                 {"docx": {"properties": {"a": "b"}}},
@@ -315,7 +315,7 @@ class TestV6ToV8Case(unittest.TestCase):
         calendar_dest = {"date_histogram": {"calendar_interval": "1m"}}
         invalid_origin = {"date_histogram": {"interval": 1}}
         invalid_dest = {"date_histogram": {"fixed_interval": 1}}
-        for (origin, expected, title) in [
+        for origin, expected, title in [
             (None, None, "none"),
             (1, 1, "invalid format"),
             (invalid_origin, invalid_dest, "invalid_origin 1"),
@@ -330,7 +330,7 @@ class TestV6ToV8Case(unittest.TestCase):
             self.assertEqual(found, expected, title)
 
     def test_fix_search_body(self):
-        for (origin, expected, title) in [
+        for origin, expected, title in [
             (None, None, "none"),
             ({}, {}, "empty"),
             (1, 1, "invalid format"),
@@ -342,7 +342,7 @@ class TestV6ToV8Case(unittest.TestCase):
             assert found == expected, title
 
     def test_fix_search_params(self):
-        for (origin, expected, title) in [
+        for origin, expected, title in [
             ({}, {}, "empty"),
             (
                 {"doc_type": "a", "another": "toto"},
@@ -369,7 +369,7 @@ class TestV6ToV8Case(unittest.TestCase):
             assert found == expected, title
 
     def test_fix_transport_error_args(self):
-        for (origin, expected, title) in [
+        for origin, expected, title in [
             ((), (), "empty"),
             (("a", "b"), ("a", "b"), "2 items"),
             (
@@ -401,7 +401,7 @@ class TestV6ToV8Case(unittest.TestCase):
             assert found == expected, title
 
     def test_fix_template(self):
-        for (origin, expected, title) in [
+        for origin, expected, title in [
             (None, {}, "none"),
             (
                 {"a": {}},

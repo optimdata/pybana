@@ -10,7 +10,6 @@ from pybana.translators.elastic.metrics import MetricTranslator
 from .filter import FilterTranslator
 from .utils import SearchListProxy
 
-
 __all__ = ("ElasticTranslator", "FilterTranslator")
 
 

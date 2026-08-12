@@ -2,7 +2,6 @@
 
 import json
 
-
 __all__ = ("ContextVisualization",)
 
 
@@ -105,9 +104,11 @@ class ContextVisualization:
                 return "Count"
             return "%s - %s" % (
                 agg["type"],
-                agg["params"]["field"]
-                if "field" in agg["params"]
-                else "Formula %(id)s" % agg,
+                (
+                    agg["params"]["field"]
+                    if "field" in agg["params"]
+                    else "Formula %(id)s" % agg
+                ),
             )
         return self.series_params(agg)["data"]["label"]
 

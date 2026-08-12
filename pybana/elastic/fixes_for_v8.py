@@ -250,9 +250,11 @@ class V6ToV8:
                     # cf https://www.elastic.co/docs/reference/aggregations/search-aggregations-bucket-datehistogram-aggregation
                     interval = v["interval"]
                     v[
-                        "calendar_interval"
-                        if _is_calendar_interval(interval)
-                        else "fixed_interval"
+                        (
+                            "calendar_interval"
+                            if _is_calendar_interval(interval)
+                            else "fixed_interval"
+                        )
                     ] = v["interval"]
                     del v["interval"]
                 elif isinstance(v, dict) or isinstance(v, list):

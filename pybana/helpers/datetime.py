@@ -143,7 +143,7 @@ def get_scaled_date_format(config, interval):
     scaled_date_formats = json.loads(config.get("dateFormat:scaled", "[]"))
     scaled_date_formats.reverse()
     default_date_format = config.get("dateFormat")
-    for (duration, date_format) in scaled_date_formats:
+    for duration, date_format in scaled_date_formats:
         if not duration or interval >= pendulum.parse(duration):
             return date_format
     return default_date_format
