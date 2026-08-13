@@ -236,6 +236,10 @@ class V6ToV8:
         if not origin_actions:
             return iter([])
         for action in origin_actions:
+            # Copy before stripping `_type`: callers often reuse the same action
+            # dicts for ES6 and ES8. Mutating in place would break the ES6 bulk
+            # (`action_request_validation_exception: type is missing`).
+            action = copy.deepcopy(action)
             self._remove_type(action)
             yield action
 
