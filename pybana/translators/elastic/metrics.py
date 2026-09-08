@@ -116,6 +116,36 @@ class DatasweetMetric(BaseMetric):
         pass
 
 
+class SinglePercentileRankMetric(PercentileRanksMetric):
+    aggtype = "single_percentile_rank"
+
+    def translate(self, proxy, agg, state, field, *args):
+        agg["params"]["values"] = [0]
+        proxy.metric(agg["id"], "percentile_ranks", **self.params(agg, field))
+        agg["params"].pop("values")
+
+
+class RateMetric(BaseMetric):
+    aggtype = "rate"
+
+    def translate(self, proxy, agg, state, field, *args):
+        pass
+
+
+class UniqueCountMetric(BaseMetric):
+    aggtype = "cardinality"
+
+    def translate(self, proxy, agg, state, field, *args):
+        pass
+
+
+class ValueCountMetric(BaseMetric):
+    aggtype = "value_count"
+
+    def translate(self, proxy, agg, state, field, *args):
+        pass
+
+
 class TopHitsMetric(BaseMetric):
     """
     Translator for top_hits metric.
@@ -225,6 +255,10 @@ TRANSLATORS = {
         PercentilesMetric,
         StdDevMetric,
         SumMetric,
+        SinglePercentileRankMetric,
+        # RateMetric,
+        # UniqueCountMetric,
+        # ValueCountMetric,
         TopHitsMetric,
         TopMetricsMetric,
         AverageBucketMetric,
