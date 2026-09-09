@@ -30,11 +30,11 @@ import pytz  # noqa: E402
 PYBANA_INDEX = ".kibana_pybana_test"
 ELASTICSEARCH_V6 = elasticsearch.Elasticsearch()
 ELASTICSEARCH_V8 = elasticsearch.Elasticsearch(["http://localhost:9201"])
-ELASTIC_V6 = ElasticsearchExtClient()
+# ELASTIC_V6 = ElasticsearchExtClient()
 ELASTIC_V8 = ElasticsearchExtClient(ELASTICSEARCH_V8)
-ELASTICS = {"default": ELASTIC_V6, "v6": ELASTIC_V6, "v8": ELASTIC_V8}
-elasticsearch_dsl.connections.add_connection("default", ELASTIC_V6)
-elasticsearch_dsl.connections.add_connection("v6", ELASTIC_V6)
+ELASTICS = {"default": ELASTIC_V8, "v8": ELASTIC_V8}
+elasticsearch_dsl.connections.add_connection("default", ELASTIC_V8)
+# elasticsearch_dsl.connections.add_connection("v6", ELASTIC_V6)
 elasticsearch_dsl.connections.add_connection("v8", ELASTIC_V8)
 
 
@@ -213,6 +213,11 @@ def translators_test(version):
             ):
                 response = search.execute()
                 VegaTranslator(using=elastic).translate(visualization, response, scope)
+            if visualization_id in ("c8ce3da6-d048-4431-9ad4-dc2e74005214",
+                            "420034ac-6f20-4ac9-9aa1-375703e4c768",
+                            "b305f5a5-b20e-4f2c-b246-ffe9117ae32a",):
+                response = search.execute()
+                print("Coucou")
             if visualization_id in ("d6c8b900-eea7-11eb-8e30-87c8d06ba6ff",):
                 response = search.execute()
                 metric = VEGA_METRICS["top_hits"]()
@@ -318,18 +323,6 @@ def test_vega_renderer_momentFormat_v8():
 
 def vega_renderer_momentFormat(version):
     elastic, kibana = init_kibana_client(version)
-
-    # Test renderer MomentFormat
-    visualization = kibana.visualization("33788540-f67f-11ee-ba56-1101ab5c82ed")
-
-    spec = json.loads(visualization.visState["params"]["spec"])
-
-    renderer = VegaRenderer("fr", "utc")
-    renderer.to_svg(spec)
-
-
-def test_vega_renderer_sibling_pipeline_aggregations():
-    elastic, kibana = init_kibana_client("v8")
 
     # Test renderer MomentFormat
     visualization = kibana.visualization("33788540-f67f-11ee-ba56-1101ab5c82ed")
