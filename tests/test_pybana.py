@@ -328,6 +328,18 @@ def vega_renderer_momentFormat(version):
     renderer.to_svg(spec)
 
 
+def test_vega_renderer_sibling_pipeline_aggregations():
+    elastic, kibana = init_kibana_client("v8")
+
+    # Test renderer MomentFormat
+    visualization = kibana.visualization("33788540-f67f-11ee-ba56-1101ab5c82ed")
+
+    spec = json.loads(visualization.visState["params"]["spec"])
+
+    renderer = VegaRenderer("fr", "utc")
+    renderer.to_svg(spec)
+
+
 def test_datasweet():
     import pybana.helpers.datasweet as ds
 
