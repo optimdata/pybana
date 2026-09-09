@@ -128,22 +128,22 @@ class SinglePercentileRankMetric(PercentileRanksMetric):
 class RateMetric(BaseMetric):
     aggtype = "rate"
 
-    def translate(self, proxy, agg, state, field, *args):
-        pass
+    def params(self, agg, field):
+        return {**get_field_arg(agg, field), **super().params(agg, field)}
 
 
 class UniqueCountMetric(BaseMetric):
     aggtype = "cardinality"
 
-    def translate(self, proxy, agg, state, field, *args):
-        pass
+    def params(self, agg, field):
+        return {**get_field_arg(agg, field), **super().params(agg, field)}
 
 
 class ValueCountMetric(BaseMetric):
     aggtype = "value_count"
 
-    def translate(self, proxy, agg, state, field, *args):
-        pass
+    def params(self, agg, field):
+        return {**get_field_arg(agg, field), **super().params(agg, field)}
 
 
 class TopHitsMetric(BaseMetric):
@@ -256,9 +256,9 @@ TRANSLATORS = {
         StdDevMetric,
         SumMetric,
         SinglePercentileRankMetric,
-        # RateMetric,
-        # UniqueCountMetric,
-        # ValueCountMetric,
+        RateMetric,
+        UniqueCountMetric,
+        ValueCountMetric,
         TopHitsMetric,
         TopMetricsMetric,
         AverageBucketMetric,

@@ -148,6 +148,10 @@ class SumBucketMetric(BaseBucketMetric):
     aggtype = "sum_bucket"
 
 
+class ValueCountMetric(BaseMetric):
+    aggtype = "value_count"
+
+
 VEGA_METRICS = {
     metric.aggtype: metric
     for metric in [
@@ -166,5 +170,6 @@ VEGA_METRICS = {
         MinBucketMetric,
         MaxBucketMetric,
         SumBucketMetric,
+        ValueCountMetric,
     ]
 }

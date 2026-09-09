@@ -102,6 +102,13 @@ class ContextVisualization:
         elif self.type() in ("table", "metric"):
             if agg["type"] == "count":
                 return "Count"
+            if agg["type"] in ["avg_bucket", "min_bucket", "max_bucket", "sum_bucket"]:
+                return "%s (%s) - [%s] of %s" % (
+                    agg["type"],
+                    agg["id"],
+                    self.metric_label(agg["params"]["customMetric"]),
+                    agg["params"]["customBucket"]["type"],
+                )
             return "%s - %s" % (
                 agg["type"],
                 (
