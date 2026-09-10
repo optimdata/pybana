@@ -30,11 +30,11 @@ import pytz  # noqa: E402
 PYBANA_INDEX = ".kibana_pybana_test"
 ELASTICSEARCH_V6 = elasticsearch.Elasticsearch()
 ELASTICSEARCH_V8 = elasticsearch.Elasticsearch(["http://localhost:9201"])
-# ELASTIC_V6 = ElasticsearchExtClient()
+ELASTIC_V6 = ElasticsearchExtClient()
 ELASTIC_V8 = ElasticsearchExtClient(ELASTICSEARCH_V8)
-ELASTICS = {"default": ELASTIC_V8, "v8": ELASTIC_V8}
+ELASTICS = {"default": ELASTIC_V6, "v6": ELASTIC_V6, "v8": ELASTIC_V8}
 elasticsearch_dsl.connections.add_connection("default", ELASTIC_V8)
-# elasticsearch_dsl.connections.add_connection("v6", ELASTIC_V6)
+elasticsearch_dsl.connections.add_connection("v6", ELASTIC_V6)
 elasticsearch_dsl.connections.add_connection("v8", ELASTIC_V8)
 
 
@@ -129,7 +129,7 @@ def client_test(version):
     kibana.update_or_create_default_index_pattern(index_pattern)
     kibana.update_or_create_default_index_pattern(index_pattern)
     visualizations = list(kibana.visualizations().scan())
-    assert len(visualizations) == 31
+    assert len(visualizations) == 34
     visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
     visualization.visState
     visualization.uiStateJSON
