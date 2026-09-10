@@ -107,20 +107,28 @@ def test_client_v8():
     client_test("v8")
 
 
-def init_kibana_client(version):
+@pytest.fixture()
+def init_kibana_fixtures():
+    for version in ["v6", "v8"]:
+        kibana = Kibana(index=PYBANA_INDEX, using=version)
+        elastic = ELASTICS[version]
+        elastic.indices.delete(f"{PYBANA_INDEX}*")
+        elastic.indices.create(f"{PYBANA_INDEX}_1")
+        load_fixtures(elastic, kibana, PYBANA_INDEX)
+        kibana.init_config()
+        kibana.init_config()
+        assert kibana.config()
+
+
+def get_clients(version):
     kibana = Kibana(index=PYBANA_INDEX, using=version)
     elastic = ELASTICS[version]
-    elastic.indices.delete(f"{PYBANA_INDEX}*")
-    elastic.indices.create(f"{PYBANA_INDEX}_1")
-    load_fixtures(elastic, kibana, PYBANA_INDEX)
-    kibana.init_config()
-    kibana.init_config()
     assert kibana.config()
     return elastic, kibana
 
 
 def client_test(version):
-    elastic, kibana = init_kibana_client(version)
+    elastic, kibana = get_clients(version)
     assert len(list(kibana.index_patterns())) == 1
     index_pattern = kibana.index_pattern("6c172f80-fb13-11e9-84e4-078763638bf3")
     index_pattern.fields
@@ -150,14 +158,6 @@ def client_test(version):
     visualization = kibana.visualization("4a23d096-541b-4638-bb4a-441fd9ed5ef4")
     with pytest.raises(ValueError):
         visualization.index(using=elastic).meta.id
-
-
-def test_translators_v6():
-    translators_test("v6")
-
-
-def test_translators_v8():
-    translators_test("v8")
 
 
 def translators_test(version):
@@ -240,14 +240,6 @@ def translators_test(version):
                     assert ret == results[agg["id"]]
 
 
-def test_vega_visualization_v6():
-    vega_visualization_test("v6")
-
-
-def test_vega_visualization_v8():
-    vega_visualization_test("v8")
-
-
 def vega_visualization_test(version):
     kibana = Kibana(index=PYBANA_INDEX, using=version)
     elastic = ELASTICS[version]
@@ -278,56 +270,8 @@ def vega_visualization_test(version):
         VegaTranslator(using=elastic).translate(visualization, response, scope)
 
 
-def test_elastic_translator_helpers():
-    assert format_from_interval("1y") == "yyyy"
-    assert format_from_interval("1q") == "yyyy-MM"
-    assert format_from_interval("1M") == "yyyy-MM"
-    assert format_from_interval("1d") == "yyyy-MM-dd"
-    assert format_from_interval("1h") == "yyyy-MM-dd'T'HH'h'"
-    assert format_from_interval("1s") == "date_time"
-
-    assert (
-        compute_auto_interval("d", datetime.datetime.now(), datetime.datetime.now())
-        == "1d"
-    )
-
-    def f(*args, **kwargs):
-        delta = datetime.timedelta(*args, **kwargs)
-        end = datetime.datetime.now()
-        beg = end - delta
-        return compute_auto_interval("auto", beg, end)
-
-    assert f(days=800) == "30d"
-    assert f(days=400) == "1w"
-    assert f(days=50) == "1d"
-    assert f(days=20) == "12h"
-    assert f(days=5) == "3h"
-    assert f(days=2) == "1h"
-    assert f(days=1) == "30m"
-    assert f(seconds=43000) == "10m"
-    assert f(seconds=13000) == "5m"
-    assert f(seconds=3600) == "1m"
-    assert f(seconds=1200) == "30s"
-    assert f(seconds=600) == "10s"
-    assert f(seconds=240) == "5s"
-    assert f(seconds=1) == "1s"
-
-
-def test_vega_renderer():
-    renderer = VegaRenderer("fr", "utc")
-    renderer.to_svg({"$schema": "https://vega.github.io/schema/vega/v5.json"})
-
-
-def test_vega_renderer_momentFormat_v6():
-    vega_renderer_momentFormat("v6")
-
-
-def test_vega_renderer_momentFormat_v8():
-    vega_renderer_momentFormat("v8")
-
-
 def vega_renderer_momentFormat(version):
-    elastic, kibana = init_kibana_client(version)
+    elastic, kibana = get_clients(version)
 
     # Test renderer MomentFormat
     visualization = kibana.visualization("33788540-f67f-11ee-ba56-1101ab5c82ed")
@@ -338,57 +282,115 @@ def vega_renderer_momentFormat(version):
     renderer.to_svg(spec)
 
 
-def test_datasweet():
-    import pybana.helpers.datasweet as ds
+class TestPybana:
+    def test_translators_v6(self, init_kibana_fixtures):
+        translators_test("v6")
 
-    assert ds.ds_avg(0, 1) == 0.5
-    assert ds.ds_count(0, 1) == 2
-    assert ds.ds_cusum(0, 1) == [0, 1]
-    assert ds.ds_derivative(0, 1)[1] == 1
-    assert ds.ds_max(0, 1) == 1
-    assert ds.ds_min(0, 1) == 0
-    assert ds.ds_next(0, 1)[0] == 1
-    assert ds.ds_prev(0, 1)[1] == 0
-    assert ds.ds_sum(0, 1) == 1
-    assert ds.ds_if(1, 2, 0) == 2
-    assert ds.ds_if([1, 0, 1], "a", "b") == ["a", "b", "a"]
-    assert ds.ds_if([1, 0, 1], ["a", "a", "a"], ["b", "b", "b"]) == ["a", "b", "a"]
-    assert ds.ds_ifnan(1, 0) == 1
-    assert ds.ds_ifnan([1, "test", float("nan"), "1"], "default") == [
-        1,
-        "default",
-        "default",
-        "1",
-    ]
+    def test_translators_v8(self, init_kibana_fixtures):
+        translators_test("v8")
 
-    assert ds.is_variable("agg1")
-    assert not ds.is_variable("xagg1")
+    def test_vega_visualization_v6(self):
+        vega_visualization_test("v6")
 
-    assert (
-        ds.datasweet_eval("avg(agg1, agg2) + 1", {"1": {"value": 0}, "2": {"value": 1}})
-        == 1.5
-    )
+    def test_vega_visualization_v8(self):
+        vega_visualization_test("v8")
 
-    assert ds.datasweet_eval("floor(agg1)", {"1": {"value": 1.23}}) == 1
-    assert ds.datasweet_eval("round(agg1)", {"1": {"value": 4.56}}) == 5
-    assert ds.datasweet_eval("ceil(agg1)", {"1": {"value": 7.89}}) == 8
-    assert ds.datasweet_eval("trunc(agg1)", {"1": {"value": 7.89}}) == 7
+    def test_elastic_translator_helpers(self):
+        assert format_from_interval("1y") == "yyyy"
+        assert format_from_interval("1q") == "yyyy-MM"
+        assert format_from_interval("1M") == "yyyy-MM"
+        assert format_from_interval("1d") == "yyyy-MM-dd"
+        assert format_from_interval("1h") == "yyyy-MM-dd'T'HH'h'"
+        assert format_from_interval("1s") == "date_time"
 
-    assert ds.datasweet_eval("1 / 0", {}) is None
+        assert (
+            compute_auto_interval("d", datetime.datetime.now(), datetime.datetime.now())
+            == "1d"
+        )
 
-    with pytest.raises(ValueError):
-        tree = ast.parse("x + 1", mode="eval")
-        tree = ds.DatasweetTransformer().visit(tree)
+        def f(*args, **kwargs):
+            delta = datetime.timedelta(*args, **kwargs)
+            end = datetime.datetime.now()
+            beg = end - delta
+            return compute_auto_interval("auto", beg, end)
 
+        assert f(days=800) == "30d"
+        assert f(days=400) == "1w"
+        assert f(days=50) == "1d"
+        assert f(days=20) == "12h"
+        assert f(days=5) == "3h"
+        assert f(days=2) == "1h"
+        assert f(days=1) == "30m"
+        assert f(seconds=43000) == "10m"
+        assert f(seconds=13000) == "5m"
+        assert f(seconds=3600) == "1m"
+        assert f(seconds=1200) == "30s"
+        assert f(seconds=600) == "10s"
+        assert f(seconds=240) == "5s"
+        assert f(seconds=1) == "1s"
 
-def test_datetime():
-    import pybana.helpers.datetime as dt
+    def test_vega_renderer(self):
+        renderer = VegaRenderer("fr", "utc")
+        renderer.to_svg({"$schema": "https://vega.github.io/schema/vega/v5.json"})
 
-    assert dt.convert("") == ""
-    assert dt.convert("Y") == "Y"
-    assert dt.convert("w") is None
-    assert dt.convert("llll") == "LLLL"
-    assert dt.convert("[coucou]") == "[coucou]"
-    assert dt.convert("Y [coucou]") == "Y [coucou]"
-    assert dt.convert("[coucou] Y"), "[coucou] Y"
-    assert dt.convert("[a [coucou]]"), "[a [coucou]]"
+    def test_vega_renderer_momentFormat_v6(self):
+        vega_renderer_momentFormat("v6")
+
+    def test_vega_renderer_momentFormat_v8(self):
+        vega_renderer_momentFormat("v8")
+
+    def test_datasweet(self):
+        import pybana.helpers.datasweet as ds
+
+        assert ds.ds_avg(0, 1) == 0.5
+        assert ds.ds_count(0, 1) == 2
+        assert ds.ds_cusum(0, 1) == [0, 1]
+        assert ds.ds_derivative(0, 1)[1] == 1
+        assert ds.ds_max(0, 1) == 1
+        assert ds.ds_min(0, 1) == 0
+        assert ds.ds_next(0, 1)[0] == 1
+        assert ds.ds_prev(0, 1)[1] == 0
+        assert ds.ds_sum(0, 1) == 1
+        assert ds.ds_if(1, 2, 0) == 2
+        assert ds.ds_if([1, 0, 1], "a", "b") == ["a", "b", "a"]
+        assert ds.ds_if([1, 0, 1], ["a", "a", "a"], ["b", "b", "b"]) == ["a", "b", "a"]
+        assert ds.ds_ifnan(1, 0) == 1
+        assert ds.ds_ifnan([1, "test", float("nan"), "1"], "default") == [
+            1,
+            "default",
+            "default",
+            "1",
+        ]
+
+        assert ds.is_variable("agg1")
+        assert not ds.is_variable("xagg1")
+
+        assert (
+            ds.datasweet_eval(
+                "avg(agg1, agg2) + 1", {"1": {"value": 0}, "2": {"value": 1}}
+            )
+            == 1.5
+        )
+
+        assert ds.datasweet_eval("floor(agg1)", {"1": {"value": 1.23}}) == 1
+        assert ds.datasweet_eval("round(agg1)", {"1": {"value": 4.56}}) == 5
+        assert ds.datasweet_eval("ceil(agg1)", {"1": {"value": 7.89}}) == 8
+        assert ds.datasweet_eval("trunc(agg1)", {"1": {"value": 7.89}}) == 7
+
+        assert ds.datasweet_eval("1 / 0", {}) is None
+
+        with pytest.raises(ValueError):
+            tree = ast.parse("x + 1", mode="eval")
+            tree = ds.DatasweetTransformer().visit(tree)
+
+    def test_datetime(self):
+        import pybana.helpers.datetime as dt
+
+        assert dt.convert("") == ""
+        assert dt.convert("Y") == "Y"
+        assert dt.convert("w") is None
+        assert dt.convert("llll") == "LLLL"
+        assert dt.convert("[coucou]") == "[coucou]"
+        assert dt.convert("Y [coucou]") == "Y [coucou]"
+        assert dt.convert("[coucou] Y"), "[coucou] Y"
+        assert dt.convert("[a [coucou]]"), "[a [coucou]]"
