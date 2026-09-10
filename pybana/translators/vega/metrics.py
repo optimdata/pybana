@@ -126,6 +126,32 @@ class TopMetricsMetric(BaseMetric):
         return value
 
 
+class BaseBucketMetric(BaseMetric):
+    def contribute(self, agg, bucket, response):
+        hit = bucket[agg["id"]]
+        return hit["value"]
+
+
+class AverageBucketMetric(BaseBucketMetric):
+    aggtype = "avg_bucket"
+
+
+class MinBucketMetric(BaseBucketMetric):
+    aggtype = "min_bucket"
+
+
+class MaxBucketMetric(BaseBucketMetric):
+    aggtype = "max_bucket"
+
+
+class SumBucketMetric(BaseBucketMetric):
+    aggtype = "sum_bucket"
+
+
+class ValueCountMetric(BaseMetric):
+    aggtype = "value_count"
+
+
 VEGA_METRICS = {
     metric.aggtype: metric
     for metric in [
@@ -140,5 +166,10 @@ VEGA_METRICS = {
         SumMetric,
         TopHitsMetric,
         TopMetricsMetric,
+        AverageBucketMetric,
+        MinBucketMetric,
+        MaxBucketMetric,
+        SumBucketMetric,
+        ValueCountMetric,
     ]
 }

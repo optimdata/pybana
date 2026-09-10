@@ -178,6 +178,16 @@ class TermsBucket(BaseBucket):
         }
 
 
+class RareTermsBucket(BaseBucket):
+    aggtype = "rare_terms"
+
+    def translate(self, agg, state, context, field):
+        return {
+            **get_field_arg(agg, field),
+            **super().translate(agg, state, context, field),
+        }
+
+
 class SignificantTermsBucket(BaseBucket):
     aggtype = "significant_terms"
 
@@ -189,6 +199,20 @@ class SignificantTermsBucket(BaseBucket):
         }
 
 
+class SignificantTextBucket(BaseBucket):
+    aggtype = "significant_text"
+
+    def translate(self, agg, state, context, field):
+        return {
+            **get_field_arg(agg, field),
+            **super().translate(agg, state, context, field),
+        }
+
+
+class TimeSeriesBucket(BaseBucket):
+    aggtype = "time_series"
+
+
 TRANSLATORS = {
     translator.aggtype: translator
     for translator in (
@@ -198,7 +222,10 @@ TRANSLATORS = {
         HistogramBucket,
         RangeBucket,
         TermsBucket,
+        RareTermsBucket,
         SignificantTermsBucket,
+        SignificantTextBucket,
+        TimeSeriesBucket,
     )
 }
 
