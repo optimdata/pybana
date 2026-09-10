@@ -112,12 +112,8 @@ def init_kibana_fixtures():
     for version in ["v6", "v8"]:
         kibana = Kibana(index=PYBANA_INDEX, using=version)
         elastic = ELASTICS[version]
-        elastic.indices.delete(f"{PYBANA_INDEX}*")
-        elastic.indices.create(f"{PYBANA_INDEX}_1")
         load_fixtures(elastic, kibana, PYBANA_INDEX)
-        kibana.init_config()
-        kibana.init_config()
-        assert kibana.config()
+        load_data(elastic, "pybana")
 
 
 def get_clients(version):
