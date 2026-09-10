@@ -213,11 +213,16 @@ def translators_test(version):
             ):
                 response = search.execute()
                 VegaTranslator(using=elastic).translate(visualization, response, scope)
-            if visualization_id in ("c8ce3da6-d048-4431-9ad4-dc2e74005214",
-                            "420034ac-6f20-4ac9-9aa1-375703e4c768",
-                            "b305f5a5-b20e-4f2c-b246-ffe9117ae32a",):
+            if visualization_id in (
+                "c8ce3da6-d048-4431-9ad4-dc2e74005214",
+                "420034ac-6f20-4ac9-9aa1-375703e4c768",
+                "b305f5a5-b20e-4f2c-b246-ffe9117ae32a",
+            ):
                 response = search.execute()
-                print("Coucou")
+                agg_dict = response.aggregations.to_dict()
+                assert "1" in agg_dict
+                assert "1-bucket" in agg_dict
+                assert "buckets" in agg_dict["1-bucket"]
             if visualization_id in ("d6c8b900-eea7-11eb-8e30-87c8d06ba6ff",):
                 response = search.execute()
                 metric = VEGA_METRICS["top_hits"]()
