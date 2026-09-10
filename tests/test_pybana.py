@@ -99,21 +99,18 @@ def load_data(elastic, index):
     elasticsearch.helpers.bulk(elastic, actions(), refresh="wait_for")
 
 
-def test_client_v6():
-    client_test("v6")
-
-
-def test_client_v8():
-    client_test("v8")
-
-
 @pytest.fixture()
 def init_kibana_fixtures():
     for version in ["v6", "v8"]:
         kibana = Kibana(index=PYBANA_INDEX, using=version)
         elastic = ELASTICS[version]
+        elastic.indices.delete(f"{PYBANA_INDEX}*")
+        elastic.indices.create(f"{PYBANA_INDEX}_1")
         load_fixtures(elastic, kibana, PYBANA_INDEX)
         load_data(elastic, "pybana")
+        kibana.init_config()
+        kibana.init_config()
+        assert kibana.config()
 
 
 def get_clients(version):
@@ -279,6 +276,12 @@ def vega_renderer_momentFormat(version):
 
 
 class TestPybana:
+    def test_client_v6(self, init_kibana_fixtures):
+        client_test("v6")
+
+    def test_client_v8(self, init_kibana_fixtures):
+        client_test("v8")
+
     def test_translators_v6(self, init_kibana_fixtures):
         translators_test("v6")
 
