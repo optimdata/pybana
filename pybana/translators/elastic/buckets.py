@@ -126,9 +126,8 @@ class FiltersBucket(BaseBucket):
             label = fltr.get("label") or fltr["input"]["query"] or "*"
             filters[label] = (
                 {
-                    "query_string": {
+                    "kql": {
                         "query": fltr["input"]["query"],
-                        "analyze_wildcard": True,
                         "default_field": "*",
                     }
                 }
