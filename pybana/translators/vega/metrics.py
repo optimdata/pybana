@@ -71,6 +71,15 @@ class DatasweetMetric(BaseMetric):
         return ret
 
 
+class PercentileRanksMetric(BaseMetric):
+    aggtype = "percentile_ranks"
+
+    def contribute(self, agg, bucket, response):
+        return list((bucket or response["aggregations"])[agg["id"]]["values"].values())[
+            agg["iter"]
+        ]
+
+
 class TopHitsMetric(BaseMetric):
     """
     Metric for top_hits.
@@ -166,6 +175,7 @@ VEGA_METRICS = {
         SumMetric,
         TopHitsMetric,
         TopMetricsMetric,
+        PercentileRanksMetric,
         AverageBucketMetric,
         MinBucketMetric,
         MaxBucketMetric,
