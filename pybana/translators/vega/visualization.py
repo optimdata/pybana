@@ -28,8 +28,17 @@ class ContextVisualization:
     def singleton(self):
         return all(map(lambda agg: agg["schema"] != "segment", self._state["aggs"]))
 
-    def _aggs_by_type(self, typ):
-        return [agg for agg in self._state["aggs"] if agg["schema"] == typ]
+    def _iter_aggs_by_type(self, typ: str):
+        for agg in self._state["aggs"]:
+            if agg["schema"] == typ:
+                if agg["type"] == "percentile_ranks":
+                    for i, rank in enumerate(agg["params"]["values"]):
+                        yield {**agg, "rank": rank, "iter": i}
+                else:
+                    yield agg
+
+    def _aggs_by_type(self, typ: str):
+        return [*self._iter_aggs_by_type(typ)]
 
     def type(self):
         return self._state["type"]
@@ -81,36 +90,39 @@ class ContextVisualization:
         return self._aggs_by_type("metric")
 
     def metric_label(self, agg):
+        agg_type = agg["type"]
         if agg["params"].get("customLabel"):
             return agg["params"]["customLabel"]
         if self.type() in ("pie", "gauge", "goal"):
-            if agg["type"] == "count":
+            if agg_type == "count":
                 return "Count"
-            elif agg["type"] == "sum":
+            elif agg_type == "sum":
                 return "Sum of %(field)s" % agg["params"]
-            elif agg["type"] == "cardinality":
+            elif agg_type == "cardinality":
                 return "Unique count of %(field)s" % agg["params"]
-            elif agg["type"] == "avg":
+            elif agg_type == "avg":
                 return "Average of %(field)s" % agg["params"]
-            elif agg["type"] == "max":
+            elif agg_type == "max":
                 return "Maximum of %(field)s" % agg["params"]
-            elif agg["type"] == "min":
+            elif agg_type == "min":
                 return "Minimum of %(field)s" % agg["params"]
             raise NotImplementedError(
-                "%s for %s is not implemented" % (agg["type"], self.type())
+                "%s for %s is not implemented" % (agg_type, self.type())
             )  # pragma: no cover
         elif self.type() in ("table", "metric"):
-            if agg["type"] == "count":
+            if agg_type == "count":
                 return "Count"
-            if agg["type"] in ["avg_bucket", "min_bucket", "max_bucket", "sum_bucket"]:
+            if agg_type == "percentile_ranks":
+                agg_type = "Percentile rank %s" % agg["rank"]
+            if agg_type in ["avg_bucket", "min_bucket", "max_bucket", "sum_bucket"]:
                 return "%s (%s) - [%s] of %s" % (
-                    agg["type"],
+                    agg_type,
                     agg["id"],
                     self.metric_label(agg["params"]["customMetric"]),
                     agg["params"]["customBucket"]["type"],
                 )
             return "%s - %s" % (
-                agg["type"],
+                agg_type,
                 (
                     agg["params"]["field"]
                     if "field" in agg["params"]

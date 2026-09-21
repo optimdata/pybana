@@ -231,6 +231,37 @@ def translators_test(version):
                 for agg in state["aggs"]:
                     ret = metric.contribute(agg, response.aggregations, response)
                     assert ret == results[agg["id"]]
+            # Test Filters
+            if visualization_id in ("2ba3534a-2d98-4510-82a5-d1ff5e19c08b",):
+                response = search.execute()
+                #
+                state = json.loads(visualization.visualization.visState)
+                assert "buckets" in response.aggregations["3"]["buckets"][0]["2"]
+                assert (
+                    "f > 1" in response.aggregations["3"]["buckets"][0]["2"]["buckets"]
+                )
+                assert (
+                    "5-bucket"
+                    in response.aggregations["3"]["buckets"][0]["2"]["buckets"]["f > 1"]
+                )
+                assert (
+                    "buckets"
+                    in response.aggregations["3"]["buckets"][0]["2"]["buckets"][
+                        "f > 1"
+                    ]["5-bucket"]
+                )
+                assert (
+                    's:"d" '
+                    in response.aggregations["3"]["buckets"][0]["2"]["buckets"][
+                        "f > 1"
+                    ]["5-bucket"]["buckets"]
+                )
+                assert (
+                    response.aggregations["3"]["buckets"][0]["2"]["buckets"]["f > 1"][
+                        "5-bucket"
+                    ]["buckets"]['s:"d" ']["5-metric"]["value"]
+                    == 0
+                )
 
 
 def vega_visualization_test(version):

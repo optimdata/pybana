@@ -13,6 +13,10 @@ from .utils import SearchListProxy
 __all__ = ("ElasticTranslator", "FilterTranslator")
 
 
+class KQLQuery(elasticsearch_dsl.query.QueryString):
+    name = "kql"
+
+
 class TopMetrics(elasticsearch_dsl.aggs.TopHits):
     name = "top_metrics"
 
@@ -25,6 +29,7 @@ class RareTermsBucket(elasticsearch_dsl.aggs.Bucket):
     name = "rare_terms"
 
 
+elasticsearch_dsl.query.Query._classes[KQLQuery.name] = KQLQuery
 elasticsearch_dsl.aggs.Agg._classes[TopMetrics.name] = TopMetrics
 elasticsearch_dsl.aggs.Agg._classes[RateMetrics.name] = RateMetrics
 elasticsearch_dsl.aggs.Agg._classes[RareTermsBucket.name] = RareTermsBucket
