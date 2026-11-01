@@ -14,6 +14,12 @@ from elasticsearch.exceptions import ConflictError
 
 
 from elasticsearch.client.utils import query_params
+from .elastic_client_interface import (
+    ElasticsearchExtCatInterface,
+    ElasticsearchExtClientInterface,
+    ElasticsearchExtIndiceInterface,
+    ElasticsearchExtIngestInterface,
+)
 from .fixes_for_v8 import v6_to_v8, v8_to_v6
 import datetime
 
@@ -40,7 +46,7 @@ class ElasticsearchSubClient:
         return self._parent.version_major
 
 
-class ElasticsearchExtIndice(ElasticsearchSubClient):
+class ElasticsearchExtIndice(ElasticsearchSubClient, ElasticsearchExtIndiceInterface):
     def __init__(self, parent: ElasticsearchBaseClient, indices: IndicesClient):
         super().__init__(parent)
         self._indices = indices
@@ -185,7 +191,7 @@ class ElasticsearchExtIndice(ElasticsearchSubClient):
         )
 
 
-class ElasticsearchExtCat(ElasticsearchSubClient):
+class ElasticsearchExtCat(ElasticsearchSubClient, ElasticsearchExtCatInterface):
     def __init__(self, parent: ElasticsearchBaseClient, cat: CatClient):
         super().__init__(parent)
         self._cat = cat
@@ -203,7 +209,7 @@ class ElasticsearchExtCat(ElasticsearchSubClient):
         return self._cat.repositories(**kwargs)
 
 
-class ElasticsearchExtIngest(ElasticsearchSubClient):
+class ElasticsearchExtIngest(ElasticsearchSubClient, ElasticsearchExtIngestInterface):
     def __init__(self, parent: ElasticsearchBaseClient, ingest: IngestClient):
         super().__init__(parent)
         self._ingest = ingest
@@ -277,7 +283,7 @@ class ScrollsCache:
         return len(keys)
 
 
-class ElasticsearchExtClient(ElasticsearchBaseClient):
+class ElasticsearchExtClient(ElasticsearchBaseClient, ElasticsearchExtClientInterface):
     def __init__(self, es: Optional[Elasticsearch] = None):
         self.es = es or Elasticsearch()
         info = self.es.info()
