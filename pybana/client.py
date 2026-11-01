@@ -7,6 +7,7 @@ from elasticsearch import NotFoundError, Elasticsearch
 import elasticsearch_dsl
 
 from pybana.elastic.elastic_client import ElasticsearchExtClient
+from pybana.elastic.elastic_client_interface import ESClientInterface
 
 from .models import Config, Dashboard, DataView, IndexPattern, Visualization, Search
 
@@ -58,9 +59,9 @@ class Kibana:
         "search": Search,
     }
 
-    def get_es(self, using):
+    def get_es(self, using) -> ESClientInterface:
         using = using or self._default
-        if isinstance(using, ElasticsearchExtClient):
+        if isinstance(using, ESClientInterface):
             return using
         es = elasticsearch_dsl.connections.get_connection(using)
         if not isinstance(es, Elasticsearch):

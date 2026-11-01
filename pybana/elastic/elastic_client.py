@@ -9,16 +9,21 @@ from elasticsearch.client import (
     IndicesClient,
     CatClient,
     IngestClient,
+    TasksClient,
 )
 from elasticsearch.exceptions import ConflictError
 
 
 from elasticsearch.client.utils import query_params
 from .elastic_client_interface import (
-    ElasticsearchExtCatInterface,
-    ElasticsearchExtClientInterface,
-    ElasticsearchExtIndiceInterface,
-    ElasticsearchExtIngestInterface,
+    ESCatInterface,
+    ESIndiceInterface,
+    ESIngestInterface,
+    ElasticsearchCatInterface,
+    ElasticsearchClientInterface,
+    ElasticsearchBaseInterface,
+    ElasticsearchIndiceInterface,
+    ElasticsearchIngestInterface,
 )
 from .fixes_for_v8 import v6_to_v8, v8_to_v6
 import datetime
@@ -26,7 +31,7 @@ import datetime
 logger = logging.getLogger("elasticsearch")
 
 
-class ElasticsearchBaseClient:
+class ElasticsearchBaseClient(ElasticsearchBaseInterface):
     def _transport_perform_request(
         self, method, url, headers=None, params=None, body=None
     ):
@@ -37,16 +42,16 @@ class ElasticsearchBaseClient:
         raise NotImplementedError()  # pragma: no cover
 
 
-class ElasticsearchSubClient:
+class ElasticsearchSubClient(ElasticsearchBaseInterface):
     def __init__(self, parent: ElasticsearchBaseClient):
         self._parent = parent
 
     @property
-    def version_major(self):
+    def version_major(self) -> int:
         return self._parent.version_major
 
 
-class ElasticsearchExtIndice(ElasticsearchSubClient, ElasticsearchExtIndiceInterface):
+class ElasticsearchExtIndice(ElasticsearchSubClient, ElasticsearchIndiceInterface):
     def __init__(self, parent: ElasticsearchBaseClient, indices: IndicesClient):
         super().__init__(parent)
         self._indices = indices
@@ -72,6 +77,9 @@ class ElasticsearchExtIndice(ElasticsearchSubClient, ElasticsearchExtIndiceInter
             body = v6_to_v8.fix_template(body)
         self._indices.create(index=index, body=body, **kwargs)
         return 1
+
+    def get_settings(self, index: str, **kwargs):
+        return self._indices.get_settings(index, **kwargs)
 
     def refresh(self, index, **kwargs):  # normally: only params
         return self._indices.refresh(index=index, **kwargs)
@@ -172,8 +180,20 @@ class ElasticsearchExtIndice(ElasticsearchSubClient, ElasticsearchExtIndiceInter
             "PUT", _make_path(index, "_mapping", doc_type), params=params, body=body
         )
 
-    def recovery(self, index=None, **kwargs):  # normally: only params
-        return self._indices.recovery(index=index, **kwargs)
+    @query_params(
+        "active_only", "bytes", "format", "h", "help", "master_timeout", "s", "v"
+    )
+    def recovery(self, index=None, params=None):
+        if self.version_major > 7:
+            if not isinstance(params, dict):
+                params = {}
+            params["active_only"] = params.get("active_only", "true")
+        elif isinstance(params, dict):
+            params.pop("active_only", "")
+
+        return self._parent._transport_perform_request(
+            "GET", _make_path("_cat", "recovery", index), params=params
+        )
 
     def update_aliases(self, body, **kwargs):  # normally: only params
         return self._indices.update_aliases(body=body, **kwargs)
@@ -191,7 +211,7 @@ class ElasticsearchExtIndice(ElasticsearchSubClient, ElasticsearchExtIndiceInter
         )
 
 
-class ElasticsearchExtCat(ElasticsearchSubClient, ElasticsearchExtCatInterface):
+class ElasticsearchExtCat(ElasticsearchSubClient, ElasticsearchCatInterface):
     def __init__(self, parent: ElasticsearchBaseClient, cat: CatClient):
         super().__init__(parent)
         self._cat = cat
@@ -209,7 +229,7 @@ class ElasticsearchExtCat(ElasticsearchSubClient, ElasticsearchExtCatInterface):
         return self._cat.repositories(**kwargs)
 
 
-class ElasticsearchExtIngest(ElasticsearchSubClient, ElasticsearchExtIngestInterface):
+class ElasticsearchExtIngest(ElasticsearchSubClient, ElasticsearchIngestInterface):
     def __init__(self, parent: ElasticsearchBaseClient, ingest: IngestClient):
         super().__init__(parent)
         self._ingest = ingest
@@ -283,29 +303,53 @@ class ScrollsCache:
         return len(keys)
 
 
-class ElasticsearchExtClient(ElasticsearchBaseClient, ElasticsearchExtClientInterface):
+class ElasticsearchExtClient(ElasticsearchBaseClient, ElasticsearchClientInterface):
     def __init__(self, es: Optional[Elasticsearch] = None):
         self.es = es or Elasticsearch()
         info = self.es.info()
         assert info is not None
         assert isinstance(info, dict)
         version = info.get("version", {}).get("number")
-        self.version = version
+        self._version = version
         self._version_major = int(self.version.split(".")[0])
-        self.name = self.version  # temporary
-        self.indices = ElasticsearchExtIndice(parent=self, indices=self.es.indices)
-        self.cat = ElasticsearchExtCat(parent=self, cat=self.es.cat)
-        self.ingest = ElasticsearchExtIngest(parent=self, ingest=self.es.ingest)
+        self._name = self.version  # temporary
+        self._indices: ESIndiceInterface = ElasticsearchExtIndice(
+            parent=self, indices=self.es.indices
+        )
+        self._cat: ESCatInterface = ElasticsearchExtCat(parent=self, cat=self.es.cat)
+        self._ingest: ESIngestInterface = ElasticsearchExtIngest(
+            parent=self, ingest=self.es.ingest
+        )
         self.transport = self.es.transport
         v6_to_v8.fix_transport_instance(self.transport)
         self.scroll_cache = ScrollsCache()
+
+    @property
+    def indices(self) -> ESIndiceInterface:
+        return self._indices
+
+    @property
+    def cat(self) -> ESCatInterface:
+        return self._cat
+
+    @property
+    def ingest(self) -> ESIngestInterface:
+        return self._ingest
 
     @property
     def version_major(self) -> int:
         return self._version_major
 
     @property
-    def tasks(self):
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def version(self) -> str:
+        return self._version
+
+    @property
+    def tasks(self) -> TasksClient:
         return self.es.tasks
 
     @query_params(
