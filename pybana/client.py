@@ -64,7 +64,12 @@ class Kibana:
         if isinstance(using, ESClientInterface):
             return using
         es = elasticsearch_dsl.connections.get_connection(using)
+        if isinstance(es, ESClientInterface):
+            # normal use case
+            return es
         if not isinstance(es, Elasticsearch):
+            # must check more:
+            # raise RuntimeError(f"unexpected class: {es.__class__.__name__}: {es}")
             return es
         es_ext = ElasticsearchExtClient(es)
         if isinstance(using, str):
