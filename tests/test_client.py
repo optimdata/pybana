@@ -82,6 +82,10 @@ class TestV8ToV6Case(unittest.TestCase):
         assert v8_to_v6.correct_search_result(
             {"hits": {"total": {"value": 15, "titi": "toto"}}}, doc_type="x"
         ) == {"hits": {"total": 15, "total_v8": {"value": 15, "titi": "toto"}}}
+        assert v8_to_v6.correct_search_result({"took": 1}, doc_type="x") == {"took": 1}
+        assert v8_to_v6.correct_search_result({"hits": []}, doc_type="x") == {
+            "hits": []
+        }
 
 
 class TestV6ToV8Case(unittest.TestCase):
@@ -98,6 +102,11 @@ class TestV6ToV8Case(unittest.TestCase):
         assert list(
             v6_to_v8.fix_actions([{"_type": "toto", "val": "A"}, {"val": "B"}])
         ) == [{"val": "A"}, {"val": "B"}]
+        assert list(
+            v6_to_v8.fix_actions(
+                [{"meta": [{"_type": "doc", "id": "1"}], "_type": "bulk"}]
+            )
+        ) == [{"meta": [{"id": "1"}]}]
 
     def test_fusion_mappings_v8(self):
         with pytest.raises(RuntimeError):
@@ -328,6 +337,7 @@ class TestV6ToV8Case(unittest.TestCase):
             (calendar_origin, calendar_dest, "calendar interval"),
             ([[fixed_origin]], [[fixed_dest]], "list in list"),
             ([{"a": fixed_origin}], [{"a": fixed_dest}], "dict in list"),
+            ([1, calendar_origin], [1, calendar_dest], "scalar in list"),
         ]:
             found = copy.deepcopy(origin)
             v6_to_v8.fix_histogram(found)
@@ -341,6 +351,7 @@ class TestV6ToV8Case(unittest.TestCase):
             ('{"another":"toto"}', '{"another":"toto"}', "unchanged"),
             ('{"doc_type":"a","another":"toto"}', '{"another": "toto"}', "doctype 1"),
             ({"doc_type": "a", "another": "toto"}, {"another": "toto"}, "doctype 2"),
+            ("{", "{", "invalid json"),
         ]:
             found = v6_to_v8.fix_search_body(origin)
             assert found == expected, title
@@ -400,6 +411,48 @@ class TestV6ToV8Case(unittest.TestCase):
                 ("a", "b", {"error": {"root_cause": [{"reason": "my_error"}]}}),
                 "string in tuple",
             ),
+            (
+                ("a", "b", {"error": {"root_cause": [{"type": "parse"}]}}),
+                (
+                    "a",
+                    "b",
+                    {
+                        "error": {
+                            "root_cause": [
+                                {"reason": {"root_cause": [{"type": "parse"}]}}
+                            ]
+                        }
+                    },
+                ),
+                "root cause without reason",
+            ),
+            (
+                ("a", "b", {"error": {"root_cause": []}}),
+                (
+                    "a",
+                    "b",
+                    {"error": {"root_cause": [{"reason": {"root_cause": []}}]}},
+                ),
+                "empty root cause",
+            ),
+            (
+                ("a", "b", {"error": {"root_cause": "nope"}}),
+                (
+                    "a",
+                    "b",
+                    {"error": {"root_cause": [{"reason": {"root_cause": "nope"}}]}},
+                ),
+                "root cause not a list",
+            ),
+            (
+                ("a", "b", {"error": {"root_cause": ["text"]}}),
+                (
+                    "a",
+                    "b",
+                    {"error": {"root_cause": [{"reason": {"root_cause": ["text"]}}]}},
+                ),
+                "root cause item not a dict",
+            ),
         ]:
             found = v6_to_v8.fix_transport_error_args(origin)
             assert found == expected, title
@@ -421,6 +474,33 @@ class TestV6ToV8Case(unittest.TestCase):
             found = copy.deepcopy(origin)
             found = v6_to_v8.fix_template(found)
             self.assertEqual(found, expected, title)
+
+    def test_fix_transport_instance(self):
+        class _Transport(object):
+            def __init__(self):
+                self.error = None
+
+            def perform_request(
+                self, method, url, headers=None, params=None, body=None
+            ):
+                if self.error:
+                    raise self.error
+                return {"method": method, "url": url}
+
+        transport = _Transport()
+        v6_to_v8.fix_transport_instance(transport)
+        wrapped = transport.perform_request
+        v6_to_v8.fix_transport_instance(transport)
+        assert transport.perform_request is wrapped
+        assert transport.perform_request("GET", "/ok") == {
+            "method": "GET",
+            "url": "/ok",
+        }
+
+        transport.error = TransportError(404, "missing")
+        with pytest.raises(TransportError) as caught:
+            transport.perform_request("GET", "/missing")
+        assert caught.value.args == (404, "missing")
 
 
 class TestScrollsCache(unittest.TestCase):
