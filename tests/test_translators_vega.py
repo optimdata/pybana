@@ -2,6 +2,7 @@
 
 import datetime
 import json
+import math
 import os
 import sys
 
@@ -12,8 +13,10 @@ import unittest  # noqa: E402
 from unittest.mock import patch  # noqa: E402
 
 import pytest  # noqa: E402
+from elasticsearch_dsl.utils import AttrList  # noqa: E402
 
 from pybana.translators.vega import colormaps  # noqa: E402
+from pybana.translators.vega.metrics import VEGA_METRICS  # noqa: E402
 from pybana.translators.vega.colormaps import (  # noqa: E402
     enforce_bounds,
     get_heatmap_color,
@@ -1201,3 +1204,97 @@ def _visualization_of(state):
 
 def spec_signal(spec, name):
     return [item["update"] for item in spec["signals"] if item["name"] == name][0]
+
+
+class TestVegaMetrics(unittest.TestCase):
+    def test_value_metrics_read_bucket_or_response(self):
+        median = VEGA_METRICS["median"]()
+        std_dev = VEGA_METRICS["std_dev"]()
+        ranks = VEGA_METRICS["percentile_ranks"]()
+        bucket = {
+            "med": {"values": {"50.0": 4}},
+            "dev": {"std_deviation": 1.5},
+            "rank": {"values": {"10.0": 1, "90.0": 9}},
+        }
+        response = {
+            "aggregations": {
+                "med": {"values": {"50.0": 8}},
+                "dev": {"std_deviation": 2.5},
+                "rank": {"values": {"10.0": 3, "90.0": 7}},
+            }
+        }
+        self.assertEqual(median.contribute({"id": "med"}, bucket, response), 4)
+        self.assertEqual(median.contribute({"id": "med"}, None, response), 8)
+        self.assertEqual(std_dev.contribute({"id": "dev"}, bucket, response), 1.5)
+        self.assertEqual(std_dev.contribute({"id": "dev"}, None, response), 2.5)
+        rank = {"id": "rank", "iter": 1}
+        self.assertEqual(ranks.contribute(rank, bucket, response), 9)
+        self.assertEqual(ranks.contribute(rank, None, response), 7)
+
+    def test_datasweet_formula_stores_value_and_nan(self):
+        metric = VEGA_METRICS["datasweet_formula"]()
+        bucket = {"1": {"value": 2}, "2": {"value": 1.5}}
+        total = metric.contribute(
+            {"id": "formula", "params": {"formula": "agg1 + 1"}}, bucket, None
+        )
+        self.assertEqual(total, 3)
+        self.assertEqual(bucket["formula"]["value"], 3)
+        scaled = metric.contribute(
+            {"id": "scaled", "params": {"formula": "agg2"}}, bucket, None
+        )
+        self.assertEqual(scaled, 1.5)
+        self.assertEqual(bucket["scaled"]["value"], 1.5)
+        missing = {"1": {"value": None}}
+        result = metric.contribute(
+            {"id": "missing", "params": {"formula": "agg1"}}, missing, None
+        )
+        self.assertTrue(math.isnan(result))
+        self.assertIsNone(missing["missing"]["value"])
+
+    def test_top_hits_aggregates_and_flattens_values(self):
+        metric = VEGA_METRICS["top_hits"]()
+        hits = {
+            "hits": {
+                "hits": [
+                    {"_source": {"name": [1, None, 2]}},
+                    {"_source": {"other": 9}},
+                    {"_source": {"name": AttrList([4])}},
+                    {"_source": {"name": 3}},
+                ]
+            }
+        }
+        empty = {"hits": {"hits": []}}
+
+        def contribute(aggregate, payload):
+            return metric.contribute(
+                {"id": "top", "params": {"field": "name", "aggregate": aggregate}},
+                {"top": payload},
+                None,
+            )
+
+        self.assertEqual(contribute("sum", hits), 10)
+        self.assertEqual(contribute("sum", empty), 0)
+        self.assertEqual(contribute("min", hits), 1)
+        self.assertIsNone(contribute("min", empty))
+        self.assertEqual(contribute("max", hits), 4)
+        self.assertIsNone(contribute("max", empty))
+        self.assertEqual(contribute("average", hits), 2.5)
+        self.assertIsNone(contribute("average", empty))
+        self.assertEqual(contribute("concat", hits), "1, 2, 4, 3")
+
+    def test_top_metrics_and_bucket_metrics(self):
+        top = VEGA_METRICS["top_metrics"]()
+        present = {"tm": {"top": [{"metrics": {"latency": 9}}]}}
+        absent = {"tm": {"top": [{"metrics": {"bytes": 1}}]}}
+        agg = {"id": "tm", "params": {"field": "latency"}}
+        self.assertEqual(top.contribute(agg, present, None), 9)
+        self.assertIsNone(top.contribute(agg, absent, None))
+        for aggtype, value in (
+            ("avg_bucket", 1.5),
+            ("min_bucket", 0),
+            ("max_bucket", 4),
+            ("sum_bucket", 9),
+        ):
+            metric = VEGA_METRICS[aggtype]()
+            bucket = {aggtype: {"value": value}}
+            self.assertEqual(metric.contribute({"id": aggtype}, bucket, None), value)
