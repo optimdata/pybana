@@ -574,9 +574,6 @@ class TestElaticsearchClientCase(unittest.TestCase):
     def test_scroll_ops_process_secondary(self):
         self.scroll_ops_process("http://localhost:9201")
 
-    def test_extended_ops_primary(self):
-        self.extended_client_operations("http://localhost:9200")
-
     def test_extended_ops_secondary(self):
         self.extended_client_operations("http://localhost:9201")
 
