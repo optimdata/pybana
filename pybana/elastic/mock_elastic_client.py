@@ -1569,7 +1569,6 @@ class MockElasticsearchPolluxClient(
         if documents:
             for index_name, docs in documents.items():
                 self.memory.add_documents(index_name, docs)
-        self._version_is_valid = True
         self._version = ElasticMemory.VERSION
         self._version_major = int(self.version.split(".")[0])
         self._name = self.version
@@ -1588,8 +1587,6 @@ class MockElasticsearchPolluxClient(
 
     @property
     def version(self) -> str:
-        if not self._version_is_valid:
-            self._update_version()
         return self._version
 
     @property
@@ -1613,20 +1610,8 @@ class MockElasticsearchPolluxClient(
         self.scroll_cache = ScrollsCache()
         return self.memory
 
-    def _execute_update_version(self, version):
-        self.version = version
-        self._version_major = int(str(version).split(".")[0])
-        self._name = self.version
-        self._version_is_valid = True
-
-    def _update_version(self):
-        self._execute_update_version(self.version)
-        return True
-
     @property
     def version_major(self) -> int:
-        if not self._version_is_valid:
-            self._update_version()
         return self._version_major
 
     @property
@@ -1635,8 +1620,6 @@ class MockElasticsearchPolluxClient(
 
     @property
     def name(self) -> str:
-        if not self._version_is_valid:
-            self._update_version()
         return self._name
 
     def info(self, **kwargs):

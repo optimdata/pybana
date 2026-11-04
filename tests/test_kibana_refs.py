@@ -8,9 +8,13 @@ import sys
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
+import pytest  # noqa: E402
+from elasticsearch_dsl.utils import AttrDict  # noqa: E402
+
 from pybana.kibana_refs import (  # noqa: E402
     first_input_control_index_pattern_ref,
     kibana_saved_object_data_source_dict,
+    reference_as_dict,
     resolve_index_pattern_document_id,
 )
 
@@ -68,6 +72,72 @@ def test_resolve_single_reference_fallback_without_index_ref_name():
 def test_resolve_returns_none_when_unresolvable():
     s = json.dumps({"query": {}, "filter": []})
     assert resolve_index_pattern_document_id(s, []) is None
+    assert resolve_index_pattern_document_id("", None) is None
+    assert resolve_index_pattern_document_id(None, None) is None
+    assert resolve_index_pattern_document_id("{", []) is None
+    assert resolve_index_pattern_document_id(True, []) is None
+
+
+def test_reference_as_dict_and_unmatched_refs():
+    raw = {"type": "index-pattern", "id": "plain"}
+    assert reference_as_dict(raw) is raw
+
+    class Ref(object):
+        def to_dict(self):
+            return {
+                "name": "kibanaSavedObjectMeta.searchSourceJSON.index",
+                "type": "index-pattern",
+                "id": "from-obj",
+            }
+
+    pairs = [("name", "other"), ("type", "dashboard"), ("id", "nope")]
+    assert reference_as_dict(pairs) == {
+        "name": "other",
+        "type": "dashboard",
+        "id": "nope",
+    }
+    source = json.dumps(
+        {"indexRefName": "kibanaSavedObjectMeta.searchSourceJSON.index"}
+    )
+    assert (
+        resolve_index_pattern_document_id(source, [pairs, Ref()])
+        == "index-pattern:from-obj"
+    )
+    assert (
+        resolve_index_pattern_document_id(
+            source,
+            [
+                {"name": "other", "type": "index-pattern", "id": "skipped"},
+                {
+                    "name": "kibanaSavedObjectMeta.searchSourceJSON.index",
+                    "type": "visualization",
+                    "id": "wrong-type",
+                },
+                {
+                    "name": "kibanaSavedObjectMeta.searchSourceJSON.index",
+                    "type": "index-pattern",
+                },
+            ],
+        )
+        is None
+    )
+    assert (
+        resolve_index_pattern_document_id(
+            json.dumps({"index": "", "query": {}}),
+            [{"name": "only", "type": "data-view", "id": "dv-1"}],
+        )
+        == "data-view:dv-1"
+    )
+    assert (
+        resolve_index_pattern_document_id(
+            json.dumps({"query": {}}),
+            [
+                {"type": "index-pattern", "id": "a"},
+                {"type": "data-view", "id": "b"},
+            ],
+        )
+        is None
+    )
 
 
 def test_first_input_control_index_pattern_ref():
@@ -86,6 +156,29 @@ def test_first_input_control_index_pattern_ref():
 def test_first_input_control_index_pattern_ref_non_input_vis():
     assert first_input_control_index_pattern_ref({"type": "histogram"}) is None
     assert first_input_control_index_pattern_ref(None) is None
+    assert first_input_control_index_pattern_ref({}) is None
+    assert (
+        first_input_control_index_pattern_ref(
+            {
+                "type": "input_control_vis",
+                "params": {
+                    "controls": ["skip", {"indexPattern": None}, {"indexPattern": "  "}]
+                },
+            }
+        )
+        is None
+    )
+    assert (
+        first_input_control_index_pattern_ref(
+            AttrDict(
+                {
+                    "type": "input_control_vis",
+                    "params": {"controls": [{"indexPattern": "  from-attr  "}]},
+                }
+            )
+        )
+        == "from-attr"
+    )
 
 
 def test_kibana_saved_object_data_source_dict_index_pattern():
@@ -117,3 +210,10 @@ def test_kibana_saved_object_data_source_dict_data_view():
 
     d = kibana_saved_object_data_source_dict(_Doc())
     assert d["title"] == "dv"
+
+    class _Other(object):
+        def to_dict(self):
+            return {"visualization": {"title": "nope"}}
+
+    with pytest.raises(KeyError):
+        kibana_saved_object_data_source_dict(_Other())

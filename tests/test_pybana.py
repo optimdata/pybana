@@ -11,6 +11,7 @@ import datetime  # noqa: E402
 import elasticsearch  # noqa: E402
 import elasticsearch_dsl  # noqa: E402
 import json  # noqa: E402
+from elasticsearch import NotFoundError  # noqa: E402
 from pybana import (  # noqa: E402
     Scope,
     ElasticTranslator,
@@ -19,6 +20,10 @@ from pybana import (  # noqa: E402
     VegaRenderer,
     VEGA_METRICS,
 )
+from pybana.elastic.mock_elastic_client import (  # noqa: E402
+    MockElasticsearchPolluxClient,
+)
+from pybana.models import Config  # noqa: E402
 from pybana.translators.elastic.buckets import (  # noqa: E402
     format_from_interval,
     compute_auto_interval,
@@ -424,3 +429,106 @@ class TestPybana:
         assert dt.convert("Y [coucou]") == "Y [coucou]"
         assert dt.convert("[coucou] Y"), "[coucou] Y"
         assert dt.convert("[a [coucou]]"), "[a [coucou]]"
+
+    def test_get_es_wraps_unextended_clients(self):
+        kibana = Kibana(using=ELASTIC_V8, index=PYBANA_INDEX)
+        odd = object()
+        elasticsearch_dsl.connections.add_connection("pybana-odd", odd)
+        elasticsearch_dsl.connections.add_connection("pybana-raw", ELASTICSEARCH_V6)
+        try:
+            assert kibana.get_es("pybana-odd") is odd
+            wrapped_direct = kibana.get_es(ELASTICSEARCH_V8)
+            assert isinstance(wrapped_direct, ElasticsearchExtClient)
+            assert wrapped_direct.es is ELASTICSEARCH_V8
+            wrapped_named = kibana.get_es("pybana-raw")
+            assert isinstance(wrapped_named, ElasticsearchExtClient)
+            assert kibana.get_es("pybana-raw") is wrapped_named
+        finally:
+            elasticsearch_dsl.connections.remove_connection("pybana-odd")
+            elasticsearch_dsl.connections.remove_connection("pybana-raw")
+
+    def test_is_v8_and_visualization_mapping_repair(self):
+        elastic = MockElasticsearchPolluxClient()
+        kibana = Kibana(using=elastic, index=".kibana")
+        assert kibana.using is elastic
+        assert kibana.is_v8() is True
+        assert kibana.visualization_mapping_needs_update() is False
+        assert kibana.ensure_visualization_mapping() is False
+
+        v6 = MockElasticsearchPolluxClient()
+        v6._version = "6.7.1"
+        v6._version_major = 6
+        assert Kibana(using=v6, index=".kibana").is_v8() is False
+
+        elastic.memory.add_index(
+            ".kibana_1",
+            aliases=[".kibana"],
+            mappings={
+                "properties": {
+                    "visualization": {"properties": {"title": {"type": "text"}}}
+                }
+            },
+        )
+        mapping = next(iter(elastic.indices.get_mapping(index=".kibana").values()))
+        assert kibana._visualization_properties_from_mapping(mapping) == {
+            "title": {"type": "text"}
+        }
+        assert kibana.visualization_mapping_needs_update() is True
+        assert kibana.ensure_visualization_mapping(reindex=False) is True
+        assert kibana.visualization_mapping_needs_update() is False
+        kibana.init_index()
+        assert list(elastic.memory.indices) == [".kibana_1"]
+
+        typed = MockElasticsearchPolluxClient()
+        typed.memory.add_index(
+            "typed",
+            mappings={
+                "doc": {
+                    "properties": {
+                        "visualization": {"properties": {"title": {"type": "keyword"}}}
+                    }
+                }
+            },
+        )
+        assert Kibana(using=typed, index="typed").visualization_mapping_needs_update()
+
+        bumped = MockElasticsearchPolluxClient()
+        bumped.memory.add_index("plain_1")
+        Kibana(using=bumped, index="plain").init_index()
+        assert "plain_2" in bumped.memory.indices
+        assert bumped.indices.exists_alias(name="plain")
+
+        incomplete = MockElasticsearchPolluxClient()
+        incomplete.memory.add_index(
+            ".kibana", mappings={"properties": {"type": {"type": "keyword"}}}
+        )
+        incomplete.index(
+            ".kibana",
+            "doc",
+            {"type": "visualization", "visualization": {"title": "t"}},
+            id="visualization:1",
+        )
+        repaired = Kibana(using=incomplete, index=".kibana")
+        assert repaired.ensure_visualization_mapping(reindex=True) is True
+        assert incomplete.get(".kibana", "doc", "visualization:1")["found"] is True
+        assert repaired.visualization_mapping_needs_update() is False
+
+    def test_config_falls_back_to_same_major_version(self):
+        elastic = MockElasticsearchPolluxClient()
+        elastic.memory.add_index(".kibana")
+        kibana = Kibana(using=elastic, index=".kibana")
+        with pytest.raises(NotFoundError):
+            kibana.config()
+
+        Config(config={"defaultIndex": "old"}, meta={"id": "config:6.7.1"}).save(
+            index=".kibana", using=elastic
+        )
+        with pytest.raises(NotFoundError):
+            kibana.config()
+
+        Config(config={"defaultIndex": "abc"}, meta={"id": "config:8.0.0"}).save(
+            index=".kibana", using=elastic
+        )
+        found = kibana.config()
+        assert found.meta.id == "config:8.0.0"
+        assert found.config.to_dict()["defaultIndex"] == "abc"

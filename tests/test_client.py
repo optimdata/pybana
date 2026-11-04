@@ -8,12 +8,16 @@ import copy  # noqa: E402
 import datetime  # noqa: E402
 import json  # noqa: E402
 import unittest  # noqa: E402
+from unittest.mock import patch  # noqa: E402
 from elasticsearch.exceptions import TransportError  # noqa: E402
 from elasticsearch.helpers import scan  # noqa: E402
+from elasticsearch.exceptions import ConflictError  # noqa: E402
+from pybana.elastic import elastic_client as elastic_client_module  # noqa: E402
 from pybana.elastic.elastic_client import (  # noqa: E402
     ElasticsearchExt,
     ScrollsCache,
     _get_scroll_id,
+    _get_scroll_ids,
 )  # noqa: E402
 
 # from ..client.base import JSONSerializer
@@ -78,6 +82,10 @@ class TestV8ToV6Case(unittest.TestCase):
         assert v8_to_v6.correct_search_result(
             {"hits": {"total": {"value": 15, "titi": "toto"}}}, doc_type="x"
         ) == {"hits": {"total": 15, "total_v8": {"value": 15, "titi": "toto"}}}
+        assert v8_to_v6.correct_search_result({"took": 1}, doc_type="x") == {"took": 1}
+        assert v8_to_v6.correct_search_result({"hits": []}, doc_type="x") == {
+            "hits": []
+        }
 
 
 class TestV6ToV8Case(unittest.TestCase):
@@ -94,6 +102,11 @@ class TestV6ToV8Case(unittest.TestCase):
         assert list(
             v6_to_v8.fix_actions([{"_type": "toto", "val": "A"}, {"val": "B"}])
         ) == [{"val": "A"}, {"val": "B"}]
+        assert list(
+            v6_to_v8.fix_actions(
+                [{"meta": [{"_type": "doc", "id": "1"}], "_type": "bulk"}]
+            )
+        ) == [{"meta": [{"id": "1"}]}]
 
     def test_fusion_mappings_v8(self):
         with pytest.raises(RuntimeError):
@@ -324,6 +337,7 @@ class TestV6ToV8Case(unittest.TestCase):
             (calendar_origin, calendar_dest, "calendar interval"),
             ([[fixed_origin]], [[fixed_dest]], "list in list"),
             ([{"a": fixed_origin}], [{"a": fixed_dest}], "dict in list"),
+            ([1, calendar_origin], [1, calendar_dest], "scalar in list"),
         ]:
             found = copy.deepcopy(origin)
             v6_to_v8.fix_histogram(found)
@@ -337,6 +351,7 @@ class TestV6ToV8Case(unittest.TestCase):
             ('{"another":"toto"}', '{"another":"toto"}', "unchanged"),
             ('{"doc_type":"a","another":"toto"}', '{"another": "toto"}', "doctype 1"),
             ({"doc_type": "a", "another": "toto"}, {"another": "toto"}, "doctype 2"),
+            ("{", "{", "invalid json"),
         ]:
             found = v6_to_v8.fix_search_body(origin)
             assert found == expected, title
@@ -396,6 +411,48 @@ class TestV6ToV8Case(unittest.TestCase):
                 ("a", "b", {"error": {"root_cause": [{"reason": "my_error"}]}}),
                 "string in tuple",
             ),
+            (
+                ("a", "b", {"error": {"root_cause": [{"type": "parse"}]}}),
+                (
+                    "a",
+                    "b",
+                    {
+                        "error": {
+                            "root_cause": [
+                                {"reason": {"root_cause": [{"type": "parse"}]}}
+                            ]
+                        }
+                    },
+                ),
+                "root cause without reason",
+            ),
+            (
+                ("a", "b", {"error": {"root_cause": []}}),
+                (
+                    "a",
+                    "b",
+                    {"error": {"root_cause": [{"reason": {"root_cause": []}}]}},
+                ),
+                "empty root cause",
+            ),
+            (
+                ("a", "b", {"error": {"root_cause": "nope"}}),
+                (
+                    "a",
+                    "b",
+                    {"error": {"root_cause": [{"reason": {"root_cause": "nope"}}]}},
+                ),
+                "root cause not a list",
+            ),
+            (
+                ("a", "b", {"error": {"root_cause": ["text"]}}),
+                (
+                    "a",
+                    "b",
+                    {"error": {"root_cause": [{"reason": {"root_cause": ["text"]}}]}},
+                ),
+                "root cause item not a dict",
+            ),
         ]:
             found = v6_to_v8.fix_transport_error_args(origin)
             assert found == expected, title
@@ -417,6 +474,33 @@ class TestV6ToV8Case(unittest.TestCase):
             found = copy.deepcopy(origin)
             found = v6_to_v8.fix_template(found)
             self.assertEqual(found, expected, title)
+
+    def test_fix_transport_instance(self):
+        class _Transport(object):
+            def __init__(self):
+                self.error = None
+
+            def perform_request(
+                self, method, url, headers=None, params=None, body=None
+            ):
+                if self.error:
+                    raise self.error
+                return {"method": method, "url": url}
+
+        transport = _Transport()
+        v6_to_v8.fix_transport_instance(transport)
+        wrapped = transport.perform_request
+        v6_to_v8.fix_transport_instance(transport)
+        assert transport.perform_request is wrapped
+        assert transport.perform_request("GET", "/ok") == {
+            "method": "GET",
+            "url": "/ok",
+        }
+
+        transport.error = TransportError(404, "missing")
+        with pytest.raises(TransportError) as caught:
+            transport.perform_request("GET", "/missing")
+        assert caught.value.args == (404, "missing")
 
 
 class TestScrollsCache(unittest.TestCase):
@@ -441,6 +525,29 @@ class TestScrollsCache(unittest.TestCase):
         self.assertEqual(len(sc), 1)
         self.assertNotIn("a", sc.cache)
         self.assertEqual(sc.fix_results({}), {})
+        untouched = {"_scroll_id": "unknown", "hits": {"total": 0, "hits": []}}
+        self.assertEqual(sc.fix_results(untouched), untouched)
+        sc.add_item(
+            results={
+                "_scroll_id": "cached",
+                "hits": {"total": {"value": 1, "relation": "eq"}, "hits": []},
+            },
+            doc_type="toto",
+        )
+        fixed = sc.fix_results(
+            {
+                "_scroll_id": "cached",
+                "hits": {
+                    "total": {"value": 1, "relation": "eq"},
+                    "hits": [{"_id": "1"}],
+                },
+            }
+        )
+        self.assertEqual(fixed["hits"]["total"], 1)
+        self.assertEqual(fixed["hits"]["hits"][0]["_type"], "toto")
+        sc.remove("cached")
+        self.assertNotIn("cached", sc.cache)
+        sc.remove("missing")
 
     def test_scroll_id(self):
         self.assertEqual(_get_scroll_id("", {}), "")
@@ -448,6 +555,10 @@ class TestScrollsCache(unittest.TestCase):
         self.assertEqual(_get_scroll_id("", {"scroll_id": "a"}), "a")
         self.assertEqual(_get_scroll_id("c", {"_scroll_id": "b"}), "c")
         self.assertEqual(_get_scroll_id(["e", "f"], {}), "e")
+        self.assertEqual(_get_scroll_ids(1, None), [])
+        self.assertEqual(_get_scroll_ids(None, "x"), [])
+        self.assertEqual(_get_scroll_ids(None, {"scroll_id": 3}), [])
+        self.assertEqual(_get_scroll_ids(None, {"_scroll_id": ["a", "b"]}), ["a", "b"])
 
 
 class TestElaticsearchClientCase(unittest.TestCase):
@@ -462,6 +573,14 @@ class TestElaticsearchClientCase(unittest.TestCase):
 
     def test_scroll_ops_process_secondary(self):
         self.scroll_ops_process("http://localhost:9201")
+
+    def test_extended_ops_secondary(self):
+        self.extended_client_operations("http://localhost:9201")
+
+    def test_scroll_non_dict_response(self):
+        elastic = ElasticsearchExt(hosts=["http://localhost:9200"], timeout=10)
+        elastic.es.transport.perform_request = lambda *args, **kwargs: "raw"
+        self.assertEqual(elastic.scroll(body={"scroll_id": None}), "raw")
 
     def scroll_ops_process(self, host: str):
         elastic = ElasticsearchExt(
@@ -536,3 +655,325 @@ class TestElaticsearchClientCase(unittest.TestCase):
             assert False
         except TransportError as e:
             assert "index_not_found_exception" in str(e)
+
+    def extended_client_operations(self, host: str):
+        elastic = ElasticsearchExt(hosts=[host], timeout=10)
+        index = "test_elastic_client_ext"
+        dest = index + "_dest"
+        alias = index + "_alias"
+        template = "test_elastic_client_template"
+        pipeline = "test_elastic_client_pipeline"
+        try:
+            self._cleanup_extended(elastic, index, dest, template, pipeline)
+            elastic.indices.create(
+                index + "_1", body={"settings": {"index": {"number_of_shards": 1}}}
+            )
+            self.assertEqual(elastic.indices.fix_mappings(None), {})
+            mapped = elastic.indices.fix_mappings({"toto": {"properties": {"a": {}}}})
+            if elastic.version_major >= 7:
+                self.assertIn("properties", mapped)
+            else:
+                self.assertIn("toto", mapped)
+            self.assertTrue(elastic.indices.exists(index + "_1"))
+            self.assertIn(index + "_1", elastic.indices.get_settings(index + "_1"))
+            self.assertTrue(
+                elastic.indices.put_alias(index=index + "_1", name=alias)[
+                    "acknowledged"
+                ]
+            )
+            self.assertTrue(elastic.indices.exists_alias(name=alias))
+            self.assertIn(index + "_1", elastic.indices.get_alias(name=alias))
+            fetched = elastic.indices.get(index + "_1")
+            self.assertIn(index + "_1", fetched)
+            self.assertIn("aliases", fetched[index + "_1"])
+
+            elastic.index(index + "_1", "toto", {"a": 1}, id="1")
+            elastic.indices.refresh(index + "_1")
+            got = elastic.get(index + "_1", "toto", "1")
+            self.assertEqual(got["_source"], {"a": 1})
+            self.assertEqual(got.get("_type"), "toto")
+            self.assertEqual(elastic.get(index + "_1", "", "1")["_id"], "1")
+            self.assertGreaterEqual(
+                elastic.count(index=index + "_1", doc_type="toto")["count"], 1
+            )
+            docs = elastic.mget(
+                body={"ids": ["1", "missing"]}, index=index + "_1", doc_type="toto"
+            )
+            self.assertTrue(docs["docs"][0]["found"])
+            self.assertFalse(docs["docs"][1]["found"])
+
+            found = elastic.search(
+                index=index + "_1",
+                doc_type="toto",
+                body={"query": {"match_all": {}}},
+            )
+            self.assertGreaterEqual(found["hits"]["total"], 1)
+            elastic.search(index=index + "_1", doc_type=["toto"], body={})
+            if elastic.version_major >= 7:
+                elastic.search(index=index + "_1", doc_type=["toto", "other"], body={})
+            elastic.search(index=index + "_1", body={})
+
+            string_bulk = (
+                '{"index": {"_index": "%s", "_type": "toto", "_id": "2"}}\n'
+                '{"a": 2}\n' % (index + "_1")
+            )
+            self.assertFalse(elastic.bulk(string_bulk)["errors"])
+            self.assertFalse(
+                elastic.bulk(
+                    [{"index": {"_index": index + "_1", "_id": "3"}}, {"a": 3}],
+                    doc_type="toto",
+                )["errors"]
+            )
+            actions = [
+                {
+                    "_op_type": "index",
+                    "_index": index + "_1",
+                    "_type": "toto",
+                    "_id": "4",
+                    "_source": {"a": 4},
+                }
+            ]
+            success, errors = elastic.helpers_bulk(actions)
+            self.assertEqual(success, 1)
+            self.assertEqual(errors, [])
+            self.assertIn("_type", actions[0])
+
+            updated = elastic.update_by_query(
+                index + "_1",
+                doc_type="toto",
+                body={"query": {"match_all": {}}},
+            )
+            self.assertGreaterEqual(updated["total"], 1)
+            copied = elastic.reindex(
+                body={"source": {"index": index + "_1"}, "dest": {"index": dest}}
+            )
+            self.assertGreaterEqual(copied["total"], 1)
+
+            self.assertTrue(elastic.cat.indices(index=index + "*"))
+            self.assertTrue(elastic.cat.count(index=index + "_1"))
+            self.assertIsNotNone(elastic.cat.templates())
+            self.assertIsNotNone(elastic.cat.repositories())
+            self.assertEqual(elastic.name, elastic.version)
+            self.assertIsNotNone(elastic.info()["version"]["number"])
+            self.assertIsNotNone(elastic.tasks.list())
+
+            template_body = {
+                "index_patterns": [index + "-tpl-*"],
+                "mappings": {"properties": {"a": {"type": "keyword"}}},
+            }
+            self.assertTrue(
+                elastic.indices.put_template(template, template_body)["acknowledged"]
+            )
+            self.assertTrue(elastic.indices.exists_template(template))
+            stored = elastic.indices.get_template(template, doc_type="toto")
+            self.assertIn(template, stored)
+            self.assertIn(template, elastic.indices.get_template(template))
+            mapping = elastic.indices.get_mapping(index=index + "_1", doc_type="toto")
+            self.assertIn(index + "_1", mapping)
+            self.assertIn(index + "_1", elastic.indices.get_mapping(index=index + "_1"))
+            self.assertTrue(
+                elastic.indices.put_mapping(
+                    "toto",
+                    {"properties": {"b": {"type": "keyword"}}},
+                    index=index + "_1",
+                )["acknowledged"]
+            )
+            with pytest.raises(ValueError):
+                elastic.indices.put_mapping(
+                    None, {"properties": {}}, index=index + "_1"
+                )
+            self.assertIsNotNone(elastic.indices.recovery(index + "_1"))
+            self.assertIsNotNone(
+                elastic.indices.recovery(index + "_1", active_only="false")
+            )
+
+            self.assertTrue(
+                elastic.indices.update_aliases(
+                    {
+                        "actions": [
+                            {"add": {"index": index + "_1", "alias": alias + "_2"}}
+                        ]
+                    }
+                )["acknowledged"]
+            )
+            elastic.indices.delete_alias(index=index + "_1", name=alias + "_2")
+            rollover_index = index + "-000001"
+            elastic.indices.create(rollover_index)
+            elastic.indices.put_alias(index=rollover_index, name=alias + "_roll")
+            rolled = elastic.indices.rollover(alias + "_roll")
+            self.assertTrue(rolled.get("rolled_over") or rolled.get("acknowledged"))
+
+            self.assertTrue(
+                elastic.ingest.put_pipeline(
+                    pipeline, {"description": "cov", "processors": []}
+                )["acknowledged"]
+            )
+            self.assertTrue(elastic.ingest.delete_pipeline(pipeline)["acknowledged"])
+
+            if elastic.version_major >= 7:
+                elastic.index(index + "_1", "toto", {"a": 1}, id="ver")
+                conflicted = elastic.index(
+                    index + "_1", "toto", {"a": 5}, id="ver", version=1
+                )
+                self.assertGreaterEqual(conflicted["_version"], 2)
+                with pytest.raises(ConflictError):
+                    elastic.index(
+                        index + "_1",
+                        "toto",
+                        {"a": 6},
+                        id="ver",
+                        version="1",
+                        version_type="external",
+                    )
+                elastic.delete(index + "_1", "toto", "2")
+                elastic.index(index + "_1", "toto", {"a": 3}, id="delint")
+                elastic.delete(index + "_1", "toto", "delint", version=1)
+                elastic.index(index + "_1", "toto", {"a": 4}, id="delstr")
+                with pytest.raises(ConflictError):
+                    elastic.delete(index + "_1", "toto", "delstr", version="1")
+                self.assertEqual(elastic.indices.delete(index + "_no_alias*"), 0)
+            else:
+                elastic.index(index + "_1", "toto", {"a": 5}, id="5")
+                elastic.delete(index + "_1", "toto", "2")
+                elastic.indices.delete(index + "_1")
+
+            bare = index + "_bare"
+            elastic.indices.create(bare)
+            elastic.indices.put_alias(index=bare, name=bare + "_alias")
+            self.assertGreaterEqual(elastic.indices.delete_safe(bare + "_alias"), 1)
+            elastic.indices.create(bare)
+            self.assertEqual(elastic.indices.delete_safe(bare), 1)
+            self.assertEqual(elastic.indices.delete_safe(index + "_missing*"), 0)
+
+            elastic.indices.create(index + "_oc")
+            self.assertTrue(elastic.indices.close(index + "_oc"))
+            self.assertTrue(elastic.indices.open(index + "_oc"))
+
+            removed = elastic.delete_by_query(
+                dest, doc_type="toto", body={"query": {"match_all": {}}}
+            )
+            self.assertGreaterEqual(removed["deleted"], 0)
+            self.assertEqual(elastic.indices.delete(dest), 1)
+            self.assertTrue(elastic.indices.delete_template(template)["acknowledged"])
+        finally:
+            self._cleanup_extended(elastic, index, dest, template, pipeline)
+
+    def test_legacy_major_version_paths(self):
+        elastic = ElasticsearchExt(["http://localhost:9200"])
+        elastic._version_major = 6
+        calls = {}
+
+        def remember(name, result=None):
+            def inner(*args, **kwargs):
+                calls[name] = (args, kwargs)
+                return {"acknowledged": True} if result is None else result
+
+            return inner
+
+        elastic.es.create = remember("create", {"result": "created"})
+        elastic.es.get = remember("get", {"_id": "1", "_source": {"a": 1}})
+        elastic.es.search = remember(
+            "search", {"hits": {"total": {"value": 3}, "hits": []}}
+        )
+        elastic.es.delete = remember("delete", {"result": "deleted"})
+        elastic.es.bulk = remember("bulk", {"errors": False})
+        elastic.es.delete_by_query = remember("delete_by_query", {"deleted": 0})
+        elastic.es.update_by_query = remember("update_by_query", {"total": 0})
+        elastic.es.count = remember("count", {"count": 0})
+        elastic.es.index = remember("index", {"_version": 3})
+        elastic.es.mget = remember("mget", {"docs": []})
+        elastic.indices._indices.delete = remember("indices_delete")
+        elastic.indices._indices.put_template = remember("put_template")
+        elastic.indices._indices.get_mapping = remember(
+            "get_mapping", {"i": {"mappings": {}}}
+        )
+        elastic.indices._indices.get_template = remember("get_template", {"tpl": {}})
+        elastic.indices._indices.exists_alias = lambda **kwargs: False
+        elastic.indices._indices.exists = lambda index: False
+        transport_calls = []
+
+        def transport(method, url, headers=None, params=None, body=None):
+            transport_calls.append((method, url, params, body))
+            return {"acknowledged": True}
+
+        elastic._transport_perform_request = transport
+
+        original = {"toto": {"properties": {"a": {}}}}
+        self.assertIs(elastic.indices.fix_mappings(original), original)
+        self.assertEqual(elastic.indices.fix_mappings(None), {})
+        self.assertEqual(elastic.indices.delete("plain"), 1)
+        self.assertEqual(calls["indices_delete"][1]["index"], "plain")
+        self.assertEqual(elastic.indices.delete("wild*"), 1)
+
+        template_body = {"mappings": {"toto": {"properties": {"a": {}}}}}
+        elastic.indices.put_template("tpl", template_body)
+        self.assertIs(calls["put_template"][1]["body"], template_body)
+        elastic.indices.get_mapping(index="i", doc_type="toto")
+        self.assertEqual(calls["get_mapping"][1]["doc_type"], "toto")
+        self.assertIn("tpl", elastic.indices.get_template("tpl", doc_type="toto"))
+
+        elastic.indices.recovery("idx", active_only="true", bytes="b")
+        self.assertNotIn("active_only", transport_calls[-1][2])
+        self.assertIn("bytes", transport_calls[-1][2])
+        elastic.indices.put_mapping("toto", {"properties": {"a": {}}}, index="i")
+        self.assertIn("toto", transport_calls[-1][1])
+
+        elastic.create("i", "toto", "1", {"a": 1})
+        self.assertEqual(calls["create"][1]["doc_type"], "toto")
+        elastic.bulk('{"index": {}}\n{}\n', index="i", doc_type="toto")
+        self.assertEqual(calls["bulk"][0][0], '{"index": {}}\n{}\n')
+        self.assertEqual(calls["bulk"][1]["doc_type"], "toto")
+        elastic.delete_by_query("i", {"query": {}}, doc_type="toto")
+        self.assertEqual(calls["delete_by_query"][1]["doc_type"], "toto")
+        fetched = elastic.get("i", "toto", "1")
+        self.assertEqual(calls["get"][1]["doc_type"], "toto")
+        self.assertNotIn("_type", fetched)
+        elastic.update_by_query("i", doc_type="toto", body={})
+        self.assertEqual(calls["update_by_query"][1]["doc_type"], "toto")
+        elastic.count(index="i", doc_type="toto")
+        self.assertEqual(calls["count"][1]["doc_type"], "toto")
+        elastic.index("i", "toto", {"a": 1}, id="1", version=3)
+        self.assertEqual(calls["index"][1]["doc_type"], "toto")
+        self.assertEqual(calls["index"][1]["version"], 3)
+        self.assertNotIn("version_type", calls["index"][1])
+        found = elastic.search(index="i", doc_type="toto", body={"query": {}})
+        self.assertEqual(found["hits"]["total"], {"value": 3})
+        self.assertEqual(calls["search"][1]["doc_type"], "toto")
+        elastic.mget(body={"ids": ["1"]}, index="i", doc_type="toto")
+        self.assertEqual(calls["mget"][1]["doc_type"], "toto")
+        elastic.delete("i", "toto", "1", version=4)
+        self.assertEqual(calls["delete"][0][1], "toto")
+        self.assertEqual(calls["delete"][1]["version"], 4)
+        self.assertNotIn("version_type", calls["delete"][1])
+        actions = [{"_op_type": "index", "_type": "toto", "_source": {"a": 1}}]
+        with patch.object(
+            elastic_client_module.helpers, "bulk", return_value=(1, [])
+        ) as bulk:
+            self.assertEqual(elastic.helpers_bulk(actions), (1, []))
+            self.assertIn("_type", bulk.call_args.kwargs["actions"][0])
+        elastic.indices.recovery.__func__.__wrapped__(
+            elastic.indices, "idx", params=None
+        )
+        self.assertIsNone(transport_calls[-1][2])
+
+        elastic._version_major = 8
+        elastic.es.search = lambda **kwargs: "raw"
+        self.assertEqual(elastic.search(index="i", doc_type="toto", body={}), "raw")
+        self.assertEqual(elastic.indices.delete("none*"), 0)
+        self.assertEqual(elastic.indices.delete_safe("none*"), 0)
+        elastic.indices.recovery.__func__.__wrapped__(
+            elastic.indices, "idx", params=None
+        )
+        self.assertEqual(transport_calls[-1][2]["active_only"], "true")
+
+    def _cleanup_extended(self, elastic, index, dest, template, pipeline):
+        elastic.indices.delete_safe(index + "*")
+        elastic.indices.delete_safe(dest)
+        try:
+            elastic.indices.delete_template(template)
+        except TransportError:
+            pass
+        try:
+            elastic.ingest.delete_pipeline(pipeline)
+        except TransportError:
+            pass

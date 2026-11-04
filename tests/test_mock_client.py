@@ -37,7 +37,6 @@ class TestMockElasticsearchPolluxClient(unittest.TestCase):
         self.assertIsInstance(client.ingest, MockElasticsearchIngestPollux)
         self.assertEqual(client.version, "8.19.3")
         self.assertEqual(client.version_major, 8)
-        self.assertTrue(client._version_is_valid)
         self.assertEqual(client.name, "8.19.3")
         self.assertEqual(client.info()["version"]["number"], "8.19.3")
         self.assertEqual(client.info()["tagline"], "You Know, for Search")
