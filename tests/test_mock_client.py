@@ -910,6 +910,62 @@ class TestMockElasticsearchPolluxClient(unittest.TestCase):
         self.assertEqual(aggs["all_docs"]["doc_count"], 4)
         self.assertEqual(aggs["unknown"], {})
 
+    def test_histogram_range_top_hits_and_bucket_pipeline(self):
+        client = MockElasticsearchPolluxClient(
+            documents={
+                "events": {
+                    "a": {"ts": "2019-01-01T00:30:00", "n": 1, "s": "a"},
+                    "b": {"ts": "2019-01-01T01:10:00", "n": 3, "s": "b"},
+                    "c": {"ts": "2019-01-01T01:40:00", "n": 5, "s": "b"},
+                }
+            }
+        )
+        found = client.search(
+            index="events",
+            body={
+                "size": 0,
+                "aggs": {
+                    "by_hour": {
+                        "date_histogram": {
+                            "field": "ts",
+                            "calendar_interval": "1h",
+                        },
+                        "aggs": {"avg_n": {"avg": {"field": "n"}}},
+                    },
+                    "by_range": {
+                        "range": {
+                            "field": "n",
+                            "ranges": [{"from": 0, "to": 4}, {"from": 4, "to": 10}],
+                        }
+                    },
+                    "stats": {"extended_stats": {"field": "n"}},
+                    "median": {"percentiles": {"field": "n", "percents": [50]}},
+                    "top": {
+                        "top_hits": {
+                            "size": 1,
+                            "sort": {"n": {"order": "desc"}},
+                            "_source": "s",
+                        }
+                    },
+                    "avg_of_hours": {"avg_bucket": {"buckets_path": "by_hour>_count"}},
+                },
+            },
+        )
+        aggs = found["aggregations"]
+        self.assertEqual(
+            [bucket["doc_count"] for bucket in aggs["by_hour"]["buckets"]], [1, 2]
+        )
+        self.assertEqual(aggs["by_hour"]["buckets"][0]["avg_n"]["value"], 1)
+        self.assertEqual(
+            [bucket["doc_count"] for bucket in aggs["by_range"]["buckets"]], [2, 1]
+        )
+        self.assertEqual(aggs["by_range"]["buckets"][0]["key"], "0.0-4.0")
+        self.assertEqual(aggs["stats"]["count"], 3)
+        self.assertIn("std_deviation", aggs["stats"])
+        self.assertIn("50.0", aggs["median"]["values"])
+        self.assertEqual(aggs["top"]["hits"]["hits"][0]["_source"], {"s": "b"})
+        self.assertEqual(aggs["avg_of_hours"]["value"], 1.5)
+
     def test_scripts_update_and_version_conflicts(self):
         client = MockElasticsearchPolluxClient()
         client.index("docs", "span", {"name": "ada", "n": 1}, id="1")

@@ -32,9 +32,12 @@ templates, pipelines, repositories) as one ``.json``, ``.yml``, or ``.yaml`` fil
 import copy
 import fnmatch
 import json
+import math
 import os
+import re
 import types
 import uuid
+from datetime import datetime, timedelta, timezone
 from functools import cmp_to_key, wraps
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 
@@ -59,7 +62,7 @@ from pybana.elastic.elastic_client_interface import (
     ElasticsearchIndiceInterface,
     ElasticsearchIngestInterface,
 )
-from pybana.elastic.fixes_for_v8 import v6_to_v8, v8_to_v6
+from pybana.elastic.fixes_for_v8 import HISTOGRAMS_CALENDARS, v6_to_v8, v8_to_v6
 
 JsonDict = Dict[str, Any]
 Target = Union[str, Sequence[str], None]
@@ -850,41 +853,674 @@ def _metric(kind: str, docs: Sequence[MemoryDocument], field: Optional[str]):
     return None
 
 
+_INTERVAL_RE = re.compile(r"^(\d+)(ms|s|m|h|d|w|M|q|y)$")
+_NAMED_INTERVALS = {
+    "minute": (1, "m"),
+    "hour": (1, "h"),
+    "day": (1, "d"),
+    "week": (1, "w"),
+    "month": (1, "M"),
+    "quarter": (1, "q"),
+    "year": (1, "y"),
+}
+_PIPELINE_AGGS = ("avg_bucket", "min_bucket", "max_bucket", "sum_bucket")
+_MAX_HISTOGRAM_BUCKETS = 10000
+
+
+def _field_items(doc: MemoryDocument, field: Optional[str]) -> List[Any]:
+    if not field:
+        return []
+    value = _get_path(doc.source, field)
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [item for item in value if item is not None]
+    return [value]
+
+
+def _parse_date(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        seconds = float(value) / 1000.0 if abs(value) >= 10**11 else float(value)
+        parsed = datetime.fromtimestamp(seconds, tz=timezone.utc)
+    elif isinstance(value, str):
+        text = value.strip()
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _zone(name: Any):
+    if not name or str(name).upper() in ("UTC", "Z", "ETC/UTC"):
+        return timezone.utc
+    try:
+        from zoneinfo import ZoneInfo
+
+        return ZoneInfo(str(name))
+    except Exception:
+        try:
+            import pytz
+
+            return pytz.timezone(str(name))
+        except Exception:
+            return timezone.utc
+
+
+def _epoch_millis(value: datetime) -> int:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return int(round(value.timestamp() * 1000))
+
+
+def _parse_interval(interval: Any):
+    if isinstance(interval, str) and interval in _NAMED_INTERVALS:
+        return _NAMED_INTERVALS[interval]
+    if not isinstance(interval, str):
+        return None
+    match = _INTERVAL_RE.match(interval)
+    if not match:
+        return None
+    return int(match.group(1)), match.group(2)
+
+
+def _interval_delta(amount: int, unit: str) -> Optional[timedelta]:
+    if unit == "ms":
+        return timedelta(milliseconds=amount)
+    if unit == "s":
+        return timedelta(seconds=amount)
+    if unit == "m":
+        return timedelta(minutes=amount)
+    if unit == "h":
+        return timedelta(hours=amount)
+    if unit == "d":
+        return timedelta(days=amount)
+    if unit == "w":
+        return timedelta(weeks=amount)
+    return None
+
+
+def _floor_calendar(value: datetime, amount: int, unit: str, tz) -> datetime:
+    local = value.astimezone(tz)
+    if unit == "s":
+        floored = local.replace(microsecond=0)
+        if amount > 1:
+            floored = floored.replace(second=(floored.second // amount) * amount)
+        return floored
+    if unit == "m":
+        floored = local.replace(second=0, microsecond=0)
+        if amount > 1:
+            floored = floored.replace(minute=(floored.minute // amount) * amount)
+        return floored
+    if unit == "h":
+        floored = local.replace(minute=0, second=0, microsecond=0)
+        if amount > 1:
+            floored = floored.replace(hour=(floored.hour // amount) * amount)
+        return floored
+    if unit == "d":
+        floored = local.replace(hour=0, minute=0, second=0, microsecond=0)
+        if amount > 1:
+            epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+            days = (floored.astimezone(timezone.utc) - epoch).days
+            floored = epoch + timedelta(days=(days // amount) * amount)
+        return floored
+    if unit == "w":
+        floored = local.replace(hour=0, minute=0, second=0, microsecond=0)
+        floored = floored - timedelta(days=floored.weekday())
+        if amount > 1:
+            anchor = datetime(1970, 1, 5, tzinfo=timezone.utc)
+            weeks = (floored.astimezone(timezone.utc) - anchor).days // 7
+            floored = anchor + timedelta(weeks=(weeks // amount) * amount)
+        return floored
+    if unit in ("M", "q"):
+        step = amount * (3 if unit == "q" else 1)
+        month_index = local.year * 12 + (local.month - 1)
+        month_index = (month_index // step) * step
+        year, month0 = divmod(month_index, 12)
+        return local.replace(
+            year=year,
+            month=month0 + 1,
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+    year = (local.year // amount) * amount
+    return local.replace(
+        year=year, month=1, day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+
+
+def _floor_fixed(value: datetime, delta: timedelta) -> datetime:
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    step = delta.total_seconds()
+    seconds = (value.astimezone(timezone.utc) - epoch).total_seconds()
+    return epoch + timedelta(seconds=math.floor(seconds / step) * step)
+
+
+def _add_interval(value: datetime, amount: int, unit: str) -> datetime:
+    if unit == "M":
+        month_index = value.year * 12 + (value.month - 1) + amount
+        year, month0 = divmod(month_index, 12)
+        return value.replace(year=year, month=month0 + 1)
+    if unit == "q":
+        return _add_interval(value, amount * 3, "M")
+    if unit == "y":
+        return value.replace(year=value.year + amount)
+    delta = _interval_delta(amount, unit)
+    return value + (delta or timedelta(0))
+
+
+def _with_subaggs(
+    bucket: JsonDict, docs: Sequence[MemoryDocument], sub: Optional[JsonDict]
+) -> JsonDict:
+    if sub:
+        bucket.update(_eval_aggs(docs, sub))
+    return bucket
+
+
+def _eval_terms_agg(
+    docs: Sequence[MemoryDocument], params: JsonDict, sub: Optional[JsonDict]
+) -> JsonDict:
+    field = params.get("field")
+    size = int(params.get("size", 10))
+    groups: Dict[Any, List[MemoryDocument]] = {}
+    for doc in docs:
+        placed = set()
+        for item in _field_items(doc, field):
+            if item in placed:
+                continue
+            placed.add(item)
+            groups.setdefault(item, []).append(doc)
+    ordered = sorted(groups.items(), key=lambda item: (-len(item[1]), str(item[0])))
+    buckets = []
+    for key, grouped in ordered[:size]:
+        buckets.append(
+            _with_subaggs({"key": key, "doc_count": len(grouped)}, grouped, sub)
+        )
+    return {
+        "doc_count_error_upper_bound": 0,
+        "sum_other_doc_count": sum(len(grouped) for _, grouped in ordered[size:]),
+        "buckets": buckets,
+    }
+
+
+def _date_histogram_spec(params: JsonDict):
+    if params.get("calendar_interval"):
+        return params["calendar_interval"], True
+    if params.get("fixed_interval"):
+        return params["fixed_interval"], False
+    interval = params.get("interval")
+    return interval, interval in HISTOGRAMS_CALENDARS
+
+
+def _bucket_start(value: datetime, amount: int, unit: str, tz, calendar: bool):
+    if calendar or unit in ("w", "M", "q", "y"):
+        return _floor_calendar(value, amount, unit, tz)
+    delta = _interval_delta(amount, unit)
+    if delta is None:
+        return _floor_calendar(value, amount, unit, tz)
+    return _floor_fixed(value, delta)
+
+
+def _histogram_keys(present: Sequence[int], start: datetime, amount: int, unit: str):
+    if not present:
+        return []
+    end_ms = present[-1]
+    keys = []
+    cursor = start
+    while len(keys) <= _MAX_HISTOGRAM_BUCKETS:
+        key = _epoch_millis(cursor)
+        keys.append(key)
+        if key >= end_ms:
+            break
+        nxt = _add_interval(cursor, amount, unit)
+        if nxt <= cursor:
+            break
+        cursor = nxt
+    if len(keys) > _MAX_HISTOGRAM_BUCKETS:
+        return list(present)
+    return keys
+
+
+def _eval_date_histogram(
+    docs: Sequence[MemoryDocument], params: JsonDict, sub: Optional[JsonDict]
+) -> JsonDict:
+    parsed = _parse_interval(_date_histogram_spec(params)[0])
+    if parsed is None:
+        return {"buckets": []}
+    amount, unit = parsed
+    _, calendar = _date_histogram_spec(params)
+    tz = _zone(params.get("time_zone"))
+    field = params.get("field")
+    groups: Dict[int, List[MemoryDocument]] = {}
+    for doc in docs:
+        placed = set()
+        for raw in _field_items(doc, field):
+            value = _parse_date(raw)
+            if value is None:
+                continue
+            key = _epoch_millis(_bucket_start(value, amount, unit, tz, calendar))
+            if key in placed:
+                continue
+            placed.add(key)
+            groups.setdefault(key, []).append(doc)
+    present = sorted(groups)
+    min_doc_count = int(params.get("min_doc_count", 0) or 0)
+    if present and min_doc_count <= 0:
+        first = datetime.fromtimestamp(present[0] / 1000.0, tz=timezone.utc)
+        keys = _histogram_keys(present, first, amount, unit)
+    else:
+        keys = present
+    buckets = []
+    for key in keys:
+        grouped = groups.get(key, [])
+        if len(grouped) < min_doc_count:
+            continue
+        bucket = {
+            "key": key,
+            "key_as_string": datetime.fromtimestamp(
+                key / 1000.0, tz=timezone.utc
+            ).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "doc_count": len(grouped),
+        }
+        buckets.append(_with_subaggs(bucket, grouped, sub))
+    if params.get("keyed"):
+        return {"buckets": {bucket["key_as_string"]: bucket for bucket in buckets}}
+    return {"buckets": buckets}
+
+
+def _eval_histogram(
+    docs: Sequence[MemoryDocument], params: JsonDict, sub: Optional[JsonDict]
+) -> JsonDict:
+    try:
+        interval = float(params.get("interval") or params.get("fixed_interval"))
+        offset = float(params.get("offset") or 0)
+    except (TypeError, ValueError):
+        return {"buckets": []}
+    if interval <= 0:
+        return {"buckets": []}
+    groups: Dict[float, List[MemoryDocument]] = {}
+    for doc in docs:
+        placed = set()
+        for raw in _field_items(doc, params.get("field")):
+            if not isinstance(raw, (int, float)) or isinstance(raw, bool):
+                continue
+            key = math.floor((raw - offset) / interval) * interval + offset
+            if key in placed:
+                continue
+            placed.add(key)
+            groups.setdefault(key, []).append(doc)
+    buckets = []
+    for key in sorted(groups):
+        grouped = groups[key]
+        buckets.append(
+            _with_subaggs({"key": key, "doc_count": len(grouped)}, grouped, sub)
+        )
+    return {"buckets": buckets}
+
+
+def _range_label(value: Any) -> str:
+    if value is None:
+        return "*"
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (int, float)):
+        return "%s.0" % int(value) if float(value).is_integer() else str(value)
+    return str(value)
+
+
+def _in_agg_range(value: Any, spec: JsonDict, as_date: bool) -> bool:
+    if as_date:
+        actual = _parse_date(value)
+        if actual is None:
+            return False
+        start = _parse_date(spec["from"]) if "from" in spec else None
+        end = _parse_date(spec["to"]) if "to" in spec else None
+        if start is not None and actual < start:
+            return False
+        if end is not None and actual >= end:
+            return False
+        return True
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    if "from" in spec and value < spec["from"]:
+        return False
+    if "to" in spec and value >= spec["to"]:
+        return False
+    return True
+
+
+def _eval_range_agg(
+    docs: Sequence[MemoryDocument],
+    params: JsonDict,
+    sub: Optional[JsonDict],
+    as_date: bool = False,
+) -> JsonDict:
+    buckets = []
+    for spec in params.get("ranges") or []:
+        if not isinstance(spec, dict):
+            continue
+        matched = []
+        for doc in docs:
+            if any(
+                _in_agg_range(item, spec, as_date)
+                for item in _field_items(doc, params.get("field"))
+            ):
+                matched.append(doc)
+        bucket = {
+            "key": spec.get("key")
+            or "%s-%s" % (_range_label(spec.get("from")), _range_label(spec.get("to"))),
+            "doc_count": len(matched),
+        }
+        if "from" in spec:
+            bucket["from"] = spec["from"]
+        if "to" in spec:
+            bucket["to"] = spec["to"]
+        buckets.append(_with_subaggs(bucket, matched, sub))
+    return {"buckets": buckets}
+
+
+def _eval_filters_agg(
+    docs: Sequence[MemoryDocument], params: JsonDict, sub: Optional[JsonDict]
+) -> JsonDict:
+    filters = params.get("filters") or {}
+    keyed = params.get("keyed", True)
+    if isinstance(filters, dict):
+        named = list(filters.items())
+    else:
+        named = [(str(index), clause) for index, clause in enumerate(filters)]
+        keyed = False
+    buckets: Dict[str, JsonDict] = {}
+    ordered = []
+    for name, clause in named:
+        matched = [doc for doc in docs if _clause_matches(doc, clause)]
+        bucket = _with_subaggs({"doc_count": len(matched)}, matched, sub)
+        buckets[str(name)] = bucket
+        listed = {"key": str(name), "doc_count": bucket["doc_count"]}
+        listed.update(
+            {key: value for key, value in bucket.items() if key != "doc_count"}
+        )
+        ordered.append(listed)
+    if keyed:
+        return {"buckets": buckets}
+    return {"buckets": ordered}
+
+
+def _numeric_items(docs: Sequence[MemoryDocument], field: Optional[str]) -> List[float]:
+    values = []
+    for doc in docs:
+        for item in _field_items(doc, field):
+            if isinstance(item, (int, float)) and not isinstance(item, bool):
+                values.append(float(item))
+    return values
+
+
+def _percentile(values: Sequence[float], percent: float):
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    rank = (percent / 100.0) * (len(ordered) - 1)
+    low = math.floor(rank)
+    high = math.ceil(rank)
+    if low == high:
+        return ordered[low]
+    weight = rank - low
+    return ordered[low] * (1 - weight) + ordered[high] * weight
+
+
+def _percent_key(percent: Any) -> str:
+    return "%.1f" % float(percent)
+
+
+def _eval_percentiles(docs: Sequence[MemoryDocument], params: JsonDict) -> JsonDict:
+    values = _numeric_items(docs, params.get("field"))
+    percents = params.get("percents") or [1, 5, 25, 50, 75, 95, 99]
+    return {
+        "values": {
+            _percent_key(percent): _percentile(values, float(percent))
+            for percent in percents
+        }
+    }
+
+
+def _eval_percentile_ranks(
+    docs: Sequence[MemoryDocument], params: JsonDict
+) -> JsonDict:
+    values = sorted(_numeric_items(docs, params.get("field")))
+    ranks = {}
+    for raw in params.get("values") or []:
+        target = float(raw)
+        if not values:
+            ranks[_percent_key(target)] = None
+        else:
+            below = sum(1 for item in values if item <= target)
+            ranks[_percent_key(target)] = 100.0 * below / len(values)
+    return {"values": ranks}
+
+
+def _eval_extended_stats(docs: Sequence[MemoryDocument], params: JsonDict) -> JsonDict:
+    values = _numeric_items(docs, params.get("field"))
+    count = len(values)
+    if count == 0:
+        empty = None
+        return {
+            "count": 0,
+            "min": empty,
+            "max": empty,
+            "avg": empty,
+            "sum": 0,
+            "sum_of_squares": empty,
+            "variance": empty,
+            "variance_population": empty,
+            "variance_sampling": empty,
+            "std_deviation": empty,
+            "std_deviation_population": empty,
+            "std_deviation_sampling": empty,
+        }
+    total = sum(values)
+    avg = total / count
+    sum_squares = sum(value * value for value in values)
+    variance_population = sum((value - avg) ** 2 for value in values) / count
+    variance_sampling = (
+        sum((value - avg) ** 2 for value in values) / (count - 1) if count > 1 else None
+    )
+    std_population = math.sqrt(variance_population)
+    std_sampling = (
+        math.sqrt(variance_sampling) if variance_sampling is not None else None
+    )
+    return {
+        "count": count,
+        "min": min(values),
+        "max": max(values),
+        "avg": avg,
+        "sum": total,
+        "sum_of_squares": sum_squares,
+        "variance": variance_population,
+        "variance_population": variance_population,
+        "variance_sampling": variance_sampling,
+        "std_deviation": std_population,
+        "std_deviation_population": std_population,
+        "std_deviation_sampling": std_sampling,
+    }
+
+
+def _top_hit(doc: MemoryDocument, source) -> JsonDict:
+    hit = {"_id": doc.id, "_score": None}
+    if source is False:
+        return hit
+    if source is None:
+        hit["_source"] = copy.deepcopy(doc.source)
+        return hit
+    if isinstance(source, str):
+        includes = [source]
+    elif isinstance(source, list):
+        includes = source
+    elif isinstance(source, dict):
+        includes = source.get("includes") or []
+    else:
+        includes = None
+    hit["_source"] = (
+        copy.deepcopy(doc.source)
+        if includes is None
+        else _filter_source(doc.source, includes)
+    )
+    return hit
+
+
+def _eval_top_hits(docs: Sequence[MemoryDocument], params: JsonDict) -> JsonDict:
+    size = int(params.get("size", 3))
+    ordered = _sort_documents(docs, params.get("sort"))
+    hits = [_top_hit(doc, params.get("_source", True)) for doc in ordered[:size]]
+    return {
+        "hits": {
+            "total": {"value": len(ordered), "relation": "eq"},
+            "max_score": None,
+            "hits": hits,
+        }
+    }
+
+
+def _eval_top_metrics(docs: Sequence[MemoryDocument], params: JsonDict) -> JsonDict:
+    size = int(params.get("size", 1))
+    ordered = _sort_documents(docs, params.get("sort"))
+    metrics = params.get("metrics") or {}
+    field = metrics.get("field") if isinstance(metrics, dict) else None
+    top = []
+    for doc in ordered[:size]:
+        value = _get_path(doc.source, field) if field else None
+        top.append({"metrics": {field: value} if field else {}})
+    return {"top": top}
+
+
+def _pipeline_kind(spec: JsonDict) -> Optional[str]:
+    for kind in _PIPELINE_AGGS:
+        if kind in spec:
+            return kind
+    return None
+
+
+def _bucket_nodes(node: JsonDict) -> List[JsonDict]:
+    buckets = node.get("buckets")
+    if isinstance(buckets, list):
+        return [bucket for bucket in buckets if isinstance(bucket, dict)]
+    if isinstance(buckets, dict):
+        return [bucket for bucket in buckets.values() if isinstance(bucket, dict)]
+    if "doc_count" in node:
+        return [node]
+    return []
+
+
+def _metric_number(bucket: JsonDict, name: str):
+    if name == "_count":
+        return bucket.get("doc_count", 0)
+    metric = bucket.get(name)
+    if not isinstance(metric, dict):
+        return None
+    value = metric.get("value")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value
+    if isinstance(metric.get("std_deviation"), (int, float)):
+        return metric["std_deviation"]
+    values = metric.get("values")
+    if isinstance(values, dict):
+        for item in values.values():
+            if isinstance(item, (int, float)) and not isinstance(item, bool):
+                return item
+    return None
+
+
+def _buckets_path_values(aggs_result: JsonDict, path: Any) -> List[float]:
+    if isinstance(path, dict):
+        path = next(iter(path.values()), "")
+    if not isinstance(path, str) or not path:
+        return []
+    parts = [part for part in path.split(">") if part]
+    node = aggs_result.get(parts[0])
+    if not isinstance(node, dict):
+        return []
+    buckets = _bucket_nodes(node)
+    if len(parts) == 1:
+        return [float(bucket.get("doc_count", 0)) for bucket in buckets]
+    values = []
+    metric_name = parts[1]
+    for bucket in buckets:
+        number = _metric_number(bucket, metric_name)
+        if number is not None:
+            values.append(float(number))
+    return values
+
+
+def _eval_pipeline(aggs_result: JsonDict, spec: JsonDict) -> JsonDict:
+    kind = _pipeline_kind(spec)
+    params = spec.get(kind) or {}
+    values = _buckets_path_values(aggs_result, params.get("buckets_path"))
+    if not values:
+        return {"value": 0 if kind == "sum_bucket" else None}
+    if kind == "sum_bucket":
+        return {"value": sum(values)}
+    if kind == "min_bucket":
+        return {"value": min(values)}
+    if kind == "max_bucket":
+        return {"value": max(values)}
+    return {"value": sum(values) / len(values)}
+
+
 def _eval_aggs(docs: Sequence[MemoryDocument], aggs: JsonDict) -> JsonDict:
-    return {name: _eval_agg(docs, spec or {}) for name, spec in (aggs or {}).items()}
+    result: JsonDict = {}
+    pipelines = []
+    for name, spec in (aggs or {}).items():
+        spec = spec or {}
+        if _pipeline_kind(spec):
+            pipelines.append((name, spec))
+        else:
+            result[name] = _eval_agg(docs, spec)
+    for name, spec in pipelines:
+        result[name] = _eval_pipeline(result, spec)
+    return result
 
 
 def _eval_agg(docs: Sequence[MemoryDocument], spec: JsonDict) -> JsonDict:
     sub = spec.get("aggs") or spec.get("aggregations")
     if "filter" in spec:
         matched = [doc for doc in docs if _clause_matches(doc, spec["filter"])]
-        bucket: JsonDict = {"doc_count": len(matched)}
-        if sub:
-            bucket.update(_eval_aggs(matched, sub))
-        return bucket
-    if "terms" in spec:
-        field = spec["terms"].get("field")
-        size = int(spec["terms"].get("size", 10))
-        groups: Dict[Any, List[MemoryDocument]] = {}
-        for doc in docs:
-            value = _get_path(doc.source, field) if field else None
-            items = value if isinstance(value, list) else [value]
-            for item in items:
-                if item is None:
-                    continue
-                groups.setdefault(item, []).append(doc)
-        ordered = sorted(groups.items(), key=lambda item: (-len(item[1]), str(item[0])))
-        buckets = []
-        for key, grouped in ordered[:size]:
-            bucket = {"key": key, "doc_count": len(grouped)}
-            if sub:
-                bucket.update(_eval_aggs(grouped, sub))
-            buckets.append(bucket)
-        return {
-            "doc_count_error_upper_bound": 0,
-            "sum_other_doc_count": sum(len(grouped) for _, grouped in ordered[size:]),
-            "buckets": buckets,
-        }
+        return _with_subaggs({"doc_count": len(matched)}, matched, sub)
+    if "filters" in spec:
+        return _eval_filters_agg(docs, spec["filters"] or {}, sub)
+    for kind in ("terms", "rare_terms", "significant_terms", "significant_text"):
+        if kind in spec:
+            return _eval_terms_agg(docs, spec[kind] or {}, sub)
+    if "date_histogram" in spec:
+        return _eval_date_histogram(docs, spec["date_histogram"] or {}, sub)
+    if "histogram" in spec:
+        return _eval_histogram(docs, spec["histogram"] or {}, sub)
+    if "range" in spec:
+        return _eval_range_agg(docs, spec["range"] or {}, sub)
+    if "date_range" in spec:
+        return _eval_range_agg(docs, spec["date_range"] or {}, sub, as_date=True)
+    if "top_hits" in spec:
+        return _eval_top_hits(docs, spec["top_hits"] or {})
+    if "top_metrics" in spec:
+        return _eval_top_metrics(docs, spec["top_metrics"] or {})
+    if "percentiles" in spec:
+        return _eval_percentiles(docs, spec["percentiles"] or {})
+    if "percentile_ranks" in spec:
+        return _eval_percentile_ranks(docs, spec["percentile_ranks"] or {})
+    if "extended_stats" in spec:
+        return _eval_extended_stats(docs, spec["extended_stats"] or {})
+    if "rate" in spec:
+        return {"value": None}
     for kind in ("sum", "avg", "min", "max", "value_count", "cardinality"):
         if kind in spec:
             return {"value": _metric(kind, docs, (spec[kind] or {}).get("field"))}
