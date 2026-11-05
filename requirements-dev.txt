@@ -9,4 +9,5 @@ recommonmark==0.6.0
 sphinx==5.2.3
 twine==3.0.0
 wheel>=0.31.0
+codecov==2.1.13
 #pluggy==1.1.0

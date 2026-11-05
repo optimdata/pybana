@@ -39,9 +39,8 @@ jobs:
         - set -e
         - flake8 .
         - black --check .
-        # - SKIP_ES=TRUE pytest # quick test without calling elastic real, should fail more quickly (3.5s vs 120s)
+        - SKIP_ES=TRUE pytest # quick test without calling elastic real, should fail more quickly (3.5s vs 120s)
         - pytest
-        # - set +e # issue with coverage
         - coverage xml -o coverage.xml
 
       after_success:
