@@ -569,7 +569,8 @@ class TestElaticsearchClientCase(unittest.TestCase):
     @parameterized.expand(get_allowed_versions(versions=["v6", "v8"]) or ["skip"])
     def test_scroll_non_dict_response(self, version):
         if version == "skip":
-            return
+            self.skipTest("test function not working for mock")
+
         elastic = ElasticsearchExt(
             hosts=[
                 "http://localhost:9200" if version == "v6" else "http://localhost:9201"
@@ -853,7 +854,7 @@ class TestElaticsearchClientCase(unittest.TestCase):
     @parameterized.expand(get_allowed_versions(versions=["v6"]) or ["skip"])
     def test_legacy_major_version_paths(self, version: str):
         if version == "skip":
-            return
+            self.skipTest("test function not working for mock")
         elastic = ElasticsearchExt(
             ["http://localhost:9200" if version == "v6" else "http://localhost:9201"],
             timeout=10,

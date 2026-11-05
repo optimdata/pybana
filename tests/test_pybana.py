@@ -422,7 +422,9 @@ class PybanaTest(unittest.TestCase):
     @parameterized.expand(get_allowed_versions(versions=["v8"]) or ["skip"])
     def test_get_es_wraps_unextended_clients(self, version):
         if version == "skip":
-            return
+            self.skipTest("test function not working for mock")
+        if "v6" not in ELASTIC_CLIENTS:
+            self.skipTest("v6 not installed")
         assert version == "v8"
         kibana = Kibana(using=ELASTIC_ORIGINS["v8"], index=PYBANA_INDEX)
         odd = object()

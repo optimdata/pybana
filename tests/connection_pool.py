@@ -24,12 +24,13 @@ ELASTIC_CLIENTS: Dict[str, ESClientInterface] = {
     "mock": MockElasticsearchPolluxClient()
 }
 if allow_es():
-    es_v6 = elasticsearch.Elasticsearch(timeout=10)
-    es_v8 = elasticsearch.Elasticsearch(["http://localhost:9201"], timeout=10)
-    ELASTIC_ORIGINS.update({"v6": es_v6, "v8": es_v8})
-    cl_v6 = ElasticsearchExtClient(es_v6)
-    cl_v8 = ElasticsearchExtClient(es_v8)
-    ELASTIC_CLIENTS.update({"default": cl_v8, "v6": cl_v6, "v8": cl_v8})
+    ELASTIC_ORIGINS["v8"] = elasticsearch.Elasticsearch(
+        ["http://localhost:9201"], timeout=30
+    )
+    ELASTIC_CLIENTS["v8"] = ElasticsearchExtClient(ELASTIC_ORIGINS["v8"])
+    ELASTIC_CLIENTS["default"] = ELASTIC_CLIENTS["v8"]
+    ELASTIC_ORIGINS['v6'] = elasticsearch.Elasticsearch(timeout=10)
+    ELASTIC_CLIENTS['v6'] = ElasticsearchExtClient(ELASTIC_ORIGINS['v6'])
 else:
     ELASTIC_CLIENTS["default"] = MockElasticsearchPolluxClient()
 
