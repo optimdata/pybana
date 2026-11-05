@@ -2,6 +2,7 @@
 
 import os
 import sys
+import unittest
 
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
@@ -31,7 +32,11 @@ from pybana.translators.elastic.buckets import (  # noqa: E402
 from pybana.elastic.elastic_client import ElasticsearchExtClient  # noqa: E402
 import pytest  # noqa: E402
 import pytz  # noqa: E402
-from tests.connection_pool import ELASTIC_CLIENTS, ELASTIC_ORIGINS, get_allowed_versions  # noqa: E402
+from tests.connection_pool import (  # noqa: E402
+    ELASTIC_CLIENTS,
+    ELASTIC_ORIGINS,
+    get_allowed_versions,
+)
 from parameterized import parameterized  # noqa: E402
 
 PYBANA_INDEX = ".kibana_pybana_test"
@@ -117,7 +122,7 @@ def get_clients(version):
     return elastic, kibana
 
 
-class PybanaTest:
+class PybanaTest(unittest.TestCase):
 
     @parameterized.expand(get_allowed_versions())
     def test_client(self, version):

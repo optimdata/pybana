@@ -850,7 +850,7 @@ class TestElaticsearchClientCase(unittest.TestCase):
         finally:
             self._cleanup_extended(elastic, index, dest, template, pipeline)
 
-    @parameterized.expand(get_allowed_versions(versions=["v6"]) or "skip")
+    @parameterized.expand(get_allowed_versions(versions=["v6"]) or ["skip"])
     def test_legacy_major_version_paths(self, version: str):
         if version == "skip":
             return
