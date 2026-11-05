@@ -1554,6 +1554,95 @@ class TestMockElasticsearchPolluxClient(unittest.TestCase):
         )
         self.assertIsNone(_metric("unknown", [same], "k"))
 
+    def test_calendar_floors_keyed_filters_and_unparsed_dates(self):
+        client = MockElasticsearchPolluxClient(
+            documents={
+                "events": {
+                    "a": {
+                        "ts": "2019-05-15T03:05:05.750Z",
+                        "status": "ok",
+                    },
+                    "b": {"ts": "not-a-date", "status": "ko"},
+                }
+            }
+        )
+        found = client.search(
+            index="events",
+            body={
+                "size": 0,
+                "aggs": {
+                    "seconds": {
+                        "date_histogram": {
+                            "field": "ts",
+                            "calendar_interval": "2s",
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "minutes": {
+                        "date_histogram": {
+                            "field": "ts",
+                            "calendar_interval": "2m",
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "hours": {
+                        "date_histogram": {
+                            "field": "ts",
+                            "calendar_interval": "2h",
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "days": {
+                        "date_histogram": {
+                            "field": "ts",
+                            "calendar_interval": "2d",
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "by_status": {
+                        "filters": {
+                            "filters": {
+                                "ok": {"term": {"status": "ok"}},
+                                "ko": {"term": {"status": "ko"}},
+                            }
+                        }
+                    },
+                    "when": {
+                        "date_range": {
+                            "field": "ts",
+                            "ranges": [
+                                {
+                                    "key": "may",
+                                    "from": "2019-05-15T00:00:00Z",
+                                    "to": "2019-05-16T00:00:00Z",
+                                }
+                            ],
+                        }
+                    },
+                },
+            },
+        )
+        aggs = found["aggregations"]
+        self.assertEqual(
+            aggs["seconds"]["buckets"][0]["key_as_string"],
+            "2019-05-15T03:05:04.000Z",
+        )
+        self.assertEqual(
+            aggs["minutes"]["buckets"][0]["key_as_string"],
+            "2019-05-15T03:04:00.000Z",
+        )
+        self.assertEqual(
+            aggs["hours"]["buckets"][0]["key_as_string"],
+            "2019-05-15T02:00:00.000Z",
+        )
+        self.assertEqual(
+            aggs["days"]["buckets"][0]["key_as_string"],
+            "2019-05-14T00:00:00.000Z",
+        )
+        self.assertEqual(aggs["by_status"]["buckets"]["ok"]["doc_count"], 1)
+        self.assertEqual(aggs["by_status"]["buckets"]["ko"]["doc_count"], 1)
+        self.assertEqual(aggs["when"]["buckets"][0]["doc_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
