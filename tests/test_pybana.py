@@ -38,6 +38,7 @@ from tests.connection_pool import (  # noqa: E402
     get_allowed_versions,
 )
 from parameterized import parameterized  # noqa: E402
+from pybana.elastic.elastic_client_interface import ESClientInterface  # noqa: E402
 
 PYBANA_INDEX = ".kibana_pybana_test"
 
@@ -170,7 +171,7 @@ class PybanaTest(unittest.TestCase):
         elastic = ELASTIC_CLIENTS[version]
         load_fixtures(elastic, kibana, PYBANA_INDEX)
         load_data(elastic, "pybana")
-        assert isinstance(elastic, ElasticsearchExtClient)
+        assert isinstance(elastic, ESClientInterface)
 
         kibana.init_config()
         # assert False
@@ -221,6 +222,12 @@ class PybanaTest(unittest.TestCase):
                     "420034ac-6f20-4ac9-9aa1-375703e4c768",
                     "b305f5a5-b20e-4f2c-b246-ffe9117ae32a",
                 ):
+                    # Elasticsearch 6 cannot run these: rate (7.11) and rare_terms (7.3).
+                    if version == "v6" and visualization_id in (
+                        "420034ac-6f20-4ac9-9aa1-375703e4c768",
+                        "b305f5a5-b20e-4f2c-b246-ffe9117ae32a",
+                    ):
+                        continue
                     response = search.execute()
                     agg_dict = response.aggregations.to_dict()
                     assert "1" in agg_dict
@@ -427,7 +434,7 @@ class PybanaTest(unittest.TestCase):
             assert kibana.get_es("pybana-odd") is odd
             wrapped_direct = kibana.get_es(ELASTIC_CLIENTS["v8"])
             assert isinstance(wrapped_direct, ElasticsearchExtClient)
-            assert wrapped_direct.es is ELASTIC_CLIENTS["v8"]
+            assert wrapped_direct.es is ELASTIC_ORIGINS["v8"]
             wrapped_named = kibana.get_es("pybana-raw")
             assert isinstance(wrapped_named, ElasticsearchExtClient)
             assert kibana.get_es("pybana-raw") is wrapped_named
