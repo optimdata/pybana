@@ -13,7 +13,8 @@ from pybana.elastic.mock_elastic_client import (  # noqa: E402
 from pybana.elastic.elastic_client_interface import ESClientInterface  # noqa: E402
 from pybana.elastic.elastic_client import ElasticsearchExtClient  # noqa: E402
 
-def _allow_es():
+
+def allow_es():
     return os.environ.get("SKIP_ES", "").upper() != "TRUE"
 
 
@@ -22,13 +23,13 @@ ELASTIC_ORIGINS: Dict[str, elasticsearch.Elasticsearch] = {}
 ELASTIC_CLIENTS: Dict[str, ESClientInterface] = {
     "mock": MockElasticsearchPolluxClient()
 }
-if _allow_es():
-    es_v6 = elasticsearch.Elasticsearch()
-    es_v8 = elasticsearch.Elasticsearch(["http://localhost:9201"])
+if allow_es():
+    es_v6 = elasticsearch.Elasticsearch(timeout=10)
+    es_v8 = elasticsearch.Elasticsearch(["http://localhost:9201"], timeout=10)
     ELASTIC_ORIGINS.update({"v6": es_v6, "v8": es_v8})
-    cl_v6 = ElasticsearchExtClient()
+    cl_v6 = ElasticsearchExtClient(es_v6)
     cl_v8 = ElasticsearchExtClient(es_v8)
-    ELASTIC_CLIENTS.update({"default": cl_v8, "v6x": cl_v6, "v8": cl_v8})
+    ELASTIC_CLIENTS.update({"default": cl_v8, "v6": cl_v6, "v8": cl_v8})
 else:
     ELASTIC_CLIENTS["default"] = MockElasticsearchPolluxClient()
 

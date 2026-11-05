@@ -31,8 +31,9 @@ from pybana.translators.elastic.buckets import (  # noqa: E402
 from pybana.elastic.elastic_client import ElasticsearchExtClient  # noqa: E402
 import pytest  # noqa: E402
 import pytz  # noqa: E402
-from tests.connection_pool import ELASTIC_CLIENTS, ELASTIC_ORIGINS, get_allowed_versions
-from parameterized
+from tests.connection_pool import ELASTIC_CLIENTS, ELASTIC_ORIGINS, get_allowed_versions  # noqa: E402
+from parameterized import parameterized  # noqa: E402
+
 PYBANA_INDEX = ".kibana_pybana_test"
 
 
@@ -118,7 +119,9 @@ def get_clients(version):
 
 class PybanaTest:
 
-    def client_test(self, version):
+    @parameterized.expand(get_allowed_versions())
+    def test_client(self, version):
+        init_kibana_fixtures(version)
         elastic, kibana = get_clients(version)
         assert len(list(kibana.index_patterns())) == 1
         index_pattern = kibana.index_pattern("6c172f80-fb13-11e9-84e4-078763638bf3")
@@ -150,178 +153,165 @@ class PybanaTest:
         with pytest.raises(ValueError):
             visualization.index(using=elastic).meta.id
 
+    @parameterized.expand(get_allowed_versions())
+    def test_translators(self, version):
+        init_kibana_fixtures(version)
+        # elasticsearch_dsl.connections.add_connection("default", ELASTIC_V8)
 
-def translators_test(version):
-    # elasticsearch_dsl.connections.add_connection("default", ELASTIC_V8)
+        kibana = Kibana(
+            index=PYBANA_INDEX,
+            using=elasticsearch_dsl.connections.get_connection(version),
+        )
+        elastic = ELASTIC_CLIENTS[version]
+        load_fixtures(elastic, kibana, PYBANA_INDEX)
+        load_data(elastic, "pybana")
+        assert isinstance(elastic, ElasticsearchExtClient)
 
-    kibana = Kibana(
-        index=PYBANA_INDEX, using=elasticsearch_dsl.connections.get_connection(version)
-    )
-    elastic = ELASTICS[version]
-    load_fixtures(elastic, kibana, PYBANA_INDEX)
-    load_data(elastic, "pybana")
-    assert isinstance(elastic, ElasticsearchExtClient)
+        kibana.init_config()
+        # assert False
 
-    kibana.init_config()
-    # assert False
-
-    translator = ElasticTranslator(using=elastic)
-    scope = Scope(
-        datetime.datetime(2019, 1, 1, tzinfo=pytz.utc),
-        datetime.datetime(2019, 1, 3, tzinfo=pytz.utc),
-        pytz.utc,
-        kibana.config(),
-    )
-    for visualization in kibana.visualizations().scan():
-        if visualization.visState["type"] in (
-            "histogram",
-            "metric",
-            "pie",
-            "line",
-            "vega",
-            "table",
-        ):
-            search = translator.translate(visualization, scope)
-            visualization_id = visualization.meta.id.split(":")[-1]
-            if visualization_id in (
-                "695c02f0-fb1a-11e9-84e4-078763638bf3",
-                "1c7226e0-ffd9-11e9-b6bd-4d907ad3c29d",
-                "cdecdff0-ffd9-11e9-b6bd-4d907ad3c29d",
-                "fa5fcfc0-ffd9-11e9-b6bd-4d907ad3c29d",
-                "3e6c9e50-ffda-11e9-b6bd-4d907ad3c29d",
-                "65881000-ffda-11e9-b6bd-4d907ad3c29d",
-                "5fa0ea20-ffdc-11e9-b6bd-4d907ad3c29d",
-                "86457e20-ffdc-11e9-b6bd-4d907ad3c29d",
-                "ad4b9310-ffdc-11e9-b6bd-4d907ad3c29d",
-                "e19d9640-ffdc-11e9-b6bd-4d907ad3c29d",
-                "2fb77bc0-ffdd-11e9-b6bd-4d907ad3c29d",
-                "9a4d3520-013f-11ea-b1ec-3910cd795dc1",
-                "53b3da70-fbbc-11e9-84e4-078763638bf3",
-                "c36b8b00-6f85-11ea-85b8-8f688e91da4a",
-                "e8c08560-7276-11ea-a6e2-834e20d9c131",
-                "5da362a0-732e-11ea-9c16-797f1f2fa4aa",
-                "96645fc0-d636-11ea-8206-6f7030d7dd42",
+        translator = ElasticTranslator(using=elastic)
+        scope = Scope(
+            datetime.datetime(2019, 1, 1, tzinfo=pytz.utc),
+            datetime.datetime(2019, 1, 3, tzinfo=pytz.utc),
+            pytz.utc,
+            kibana.config(),
+        )
+        for visualization in kibana.visualizations().scan():
+            if visualization.visState["type"] in (
+                "histogram",
+                "metric",
+                "pie",
+                "line",
+                "vega",
+                "table",
             ):
-                response = search.execute()
-                VegaTranslator(using=elastic).translate(visualization, response, scope)
-            if visualization_id in (
-                "c8ce3da6-d048-4431-9ad4-dc2e74005214",
-                "420034ac-6f20-4ac9-9aa1-375703e4c768",
-                "b305f5a5-b20e-4f2c-b246-ffe9117ae32a",
-            ):
-                response = search.execute()
-                agg_dict = response.aggregations.to_dict()
-                assert "1" in agg_dict
-                assert "1-bucket" in agg_dict
-                assert "buckets" in agg_dict["1-bucket"]
-            if visualization_id in ("d6c8b900-eea7-11eb-8e30-87c8d06ba6ff",):
-                response = search.execute()
-                metric = VEGA_METRICS["top_hits"]()
-                state = json.loads(visualization.visualization.visState)
-                results = {
-                    "1": "l, k",
-                    "2": 47,
-                    "3": 48,
-                    "4": 46,
-                    "5": 141,
-                    "6": "48.0, 49.0, 47.0, 48.0",
-                }
-                for agg in state["aggs"]:
-                    ret = metric.contribute(agg, response.aggregations, response)
-                    assert ret == results[agg["id"]]
-            # Test Filters
-            if visualization_id in ("2ba3534a-2d98-4510-82a5-d1ff5e19c08b",):
-                response = search.execute()
-                #
-                state = json.loads(visualization.visualization.visState)
-                assert "buckets" in response.aggregations["3"]["buckets"][0]["2"]
-                assert (
-                    "f > 1" in response.aggregations["3"]["buckets"][0]["2"]["buckets"]
-                )
-                assert (
-                    "5-bucket"
-                    in response.aggregations["3"]["buckets"][0]["2"]["buckets"]["f > 1"]
-                )
-                assert (
-                    "buckets"
-                    in response.aggregations["3"]["buckets"][0]["2"]["buckets"][
+                search = translator.translate(visualization, scope)
+                visualization_id = visualization.meta.id.split(":")[-1]
+                if visualization_id in (
+                    "695c02f0-fb1a-11e9-84e4-078763638bf3",
+                    "1c7226e0-ffd9-11e9-b6bd-4d907ad3c29d",
+                    "cdecdff0-ffd9-11e9-b6bd-4d907ad3c29d",
+                    "fa5fcfc0-ffd9-11e9-b6bd-4d907ad3c29d",
+                    "3e6c9e50-ffda-11e9-b6bd-4d907ad3c29d",
+                    "65881000-ffda-11e9-b6bd-4d907ad3c29d",
+                    "5fa0ea20-ffdc-11e9-b6bd-4d907ad3c29d",
+                    "86457e20-ffdc-11e9-b6bd-4d907ad3c29d",
+                    "ad4b9310-ffdc-11e9-b6bd-4d907ad3c29d",
+                    "e19d9640-ffdc-11e9-b6bd-4d907ad3c29d",
+                    "2fb77bc0-ffdd-11e9-b6bd-4d907ad3c29d",
+                    "9a4d3520-013f-11ea-b1ec-3910cd795dc1",
+                    "53b3da70-fbbc-11e9-84e4-078763638bf3",
+                    "c36b8b00-6f85-11ea-85b8-8f688e91da4a",
+                    "e8c08560-7276-11ea-a6e2-834e20d9c131",
+                    "5da362a0-732e-11ea-9c16-797f1f2fa4aa",
+                    "96645fc0-d636-11ea-8206-6f7030d7dd42",
+                ):
+                    response = search.execute()
+                    VegaTranslator(using=elastic).translate(
+                        visualization, response, scope
+                    )
+                if visualization_id in (
+                    "c8ce3da6-d048-4431-9ad4-dc2e74005214",
+                    "420034ac-6f20-4ac9-9aa1-375703e4c768",
+                    "b305f5a5-b20e-4f2c-b246-ffe9117ae32a",
+                ):
+                    response = search.execute()
+                    agg_dict = response.aggregations.to_dict()
+                    assert "1" in agg_dict
+                    assert "1-bucket" in agg_dict
+                    assert "buckets" in agg_dict["1-bucket"]
+                if visualization_id in ("d6c8b900-eea7-11eb-8e30-87c8d06ba6ff",):
+                    response = search.execute()
+                    metric = VEGA_METRICS["top_hits"]()
+                    state = json.loads(visualization.visualization.visState)
+                    results = {
+                        "1": "l, k",
+                        "2": 47,
+                        "3": 48,
+                        "4": 46,
+                        "5": 141,
+                        "6": "48.0, 49.0, 47.0, 48.0",
+                    }
+                    for agg in state["aggs"]:
+                        ret = metric.contribute(agg, response.aggregations, response)
+                        assert ret == results[agg["id"]]
+                # Test Filters
+                if visualization_id in ("2ba3534a-2d98-4510-82a5-d1ff5e19c08b",):
+                    response = search.execute()
+                    #
+                    state = json.loads(visualization.visualization.visState)
+                    assert "buckets" in response.aggregations["3"]["buckets"][0]["2"]
+                    assert (
                         "f > 1"
-                    ]["5-bucket"]
-                )
-                assert (
-                    's:"d" '
-                    in response.aggregations["3"]["buckets"][0]["2"]["buckets"][
-                        "f > 1"
-                    ]["5-bucket"]["buckets"]
-                )
-                assert (
-                    response.aggregations["3"]["buckets"][0]["2"]["buckets"]["f > 1"][
+                        in response.aggregations["3"]["buckets"][0]["2"]["buckets"]
+                    )
+                    assert (
                         "5-bucket"
-                    ]["buckets"]['s:"d" ']["5-metric"]["value"]
-                    == 0
-                )
+                        in response.aggregations["3"]["buckets"][0]["2"]["buckets"][
+                            "f > 1"
+                        ]
+                    )
+                    assert (
+                        "buckets"
+                        in response.aggregations["3"]["buckets"][0]["2"]["buckets"][
+                            "f > 1"
+                        ]["5-bucket"]
+                    )
+                    assert (
+                        's:"d" '
+                        in response.aggregations["3"]["buckets"][0]["2"]["buckets"][
+                            "f > 1"
+                        ]["5-bucket"]["buckets"]
+                    )
+                    assert (
+                        response.aggregations["3"]["buckets"][0]["2"]["buckets"][
+                            "f > 1"
+                        ]["5-bucket"]["buckets"]['s:"d" ']["5-metric"]["value"]
+                        == 0
+                    )
 
+    @parameterized.expand(get_allowed_versions())
+    def test_vega_visualization(self, version):
+        kibana = Kibana(index=PYBANA_INDEX, using=version)
+        elastic = ELASTIC_CLIENTS[version]
 
-def vega_visualization_test(version):
-    kibana = Kibana(index=PYBANA_INDEX, using=version)
-    elastic = ELASTICS[version]
+        load_fixtures(elastic, kibana, PYBANA_INDEX)
+        load_data(elastic, "pybana")
+        kibana.init_config()
+        translator = ElasticTranslator(using=elastic)
+        scope = Scope(
+            datetime.datetime(2019, 1, 1, tzinfo=pytz.utc),
+            datetime.datetime(2019, 1, 3, tzinfo=pytz.utc),
+            pytz.utc,
+            kibana.config(),
+        )
+        keys = [
+            "37589ee0-70f3-11ea-9898-e1fb79cbf2bc",
+            "da8f8510-7107-11ea-9898-e1fb79cbf2bc",
+        ]
+        for key in keys:
+            visualization = kibana.visualization(key)
+            search = translator.translate(visualization, scope)
+            search_data = search.to_dict()
+            if isinstance(search_data, list) and len(search_data) == 1:
+                search_data = search_data[0]
+            assert search_data["aggs"]["category"]["date_histogram"]["interval"] == "1h"
 
-    load_fixtures(elastic, kibana, PYBANA_INDEX)
-    load_data(elastic, "pybana")
-    kibana.init_config()
-    translator = ElasticTranslator(using=elastic)
-    scope = Scope(
-        datetime.datetime(2019, 1, 1, tzinfo=pytz.utc),
-        datetime.datetime(2019, 1, 3, tzinfo=pytz.utc),
-        pytz.utc,
-        kibana.config(),
-    )
-    keys = [
-        "37589ee0-70f3-11ea-9898-e1fb79cbf2bc",
-        "da8f8510-7107-11ea-9898-e1fb79cbf2bc",
-    ]
-    for key in keys:
-        visualization = kibana.visualization(key)
-        search = translator.translate(visualization, scope)
-        search_data = search.to_dict()
-        if isinstance(search_data, list) and len(search_data) == 1:
-            search_data = search_data[0]
-        assert search_data["aggs"]["category"]["date_histogram"]["interval"] == "1h"
+            response = search.execute()
+            VegaTranslator(using=elastic).translate(visualization, response, scope)
 
-        response = search.execute()
-        VegaTranslator(using=elastic).translate(visualization, response, scope)
+    @parameterized.expand(get_allowed_versions())
+    def test_vega_renderer_momentFormat(self, version):
+        elastic, kibana = get_clients(version)
 
+        # Test renderer MomentFormat
+        visualization = kibana.visualization("33788540-f67f-11ee-ba56-1101ab5c82ed")
 
-def vega_renderer_momentFormat(version):
-    elastic, kibana = get_clients(version)
+        spec = json.loads(visualization.visState["params"]["spec"])
 
-    # Test renderer MomentFormat
-    visualization = kibana.visualization("33788540-f67f-11ee-ba56-1101ab5c82ed")
-
-    spec = json.loads(visualization.visState["params"]["spec"])
-
-    renderer = VegaRenderer("fr", "utc")
-    renderer.to_svg(spec)
-
-
-class TestPybana:
-    def test_client_v6(self, init_kibana_fixtures):
-        client_test("v6")
-
-    def test_client_v8(self, init_kibana_fixtures):
-        client_test("v8")
-
-    def test_translators_v6(self, init_kibana_fixtures):
-        translators_test("v6")
-
-    def test_translators_v8(self, init_kibana_fixtures):
-        translators_test("v8")
-
-    def test_vega_visualization_v6(self):
-        vega_visualization_test("v6")
-
-    def test_vega_visualization_v8(self):
-        vega_visualization_test("v8")
+        renderer = VegaRenderer("fr", "utc")
+        renderer.to_svg(spec)
 
     def test_elastic_translator_helpers(self):
         assert format_from_interval("1y") == "yyyy"
@@ -360,12 +350,6 @@ class TestPybana:
     def test_vega_renderer(self):
         renderer = VegaRenderer("fr", "utc")
         renderer.to_svg({"$schema": "https://vega.github.io/schema/vega/v5.json"})
-
-    def test_vega_renderer_momentFormat_v6(self):
-        vega_renderer_momentFormat("v6")
-
-    def test_vega_renderer_momentFormat_v8(self):
-        vega_renderer_momentFormat("v8")
 
     def test_datasweet(self):
         import pybana.helpers.datasweet as ds
@@ -423,16 +407,22 @@ class TestPybana:
         assert dt.convert("[coucou] Y"), "[coucou] Y"
         assert dt.convert("[a [coucou]]"), "[a [coucou]]"
 
-    def test_get_es_wraps_unextended_clients(self):
-        kibana = Kibana(using=ELASTIC_V8, index=PYBANA_INDEX)
+    @parameterized.expand(get_allowed_versions(versions=["v8"]) or ["skip"])
+    def test_get_es_wraps_unextended_clients(self, version):
+        if version == "skip":
+            return
+        assert version == "v8"
+        kibana = Kibana(using=ELASTIC_ORIGINS["v8"], index=PYBANA_INDEX)
         odd = object()
         elasticsearch_dsl.connections.add_connection("pybana-odd", odd)
-        elasticsearch_dsl.connections.add_connection("pybana-raw", ELASTICSEARCH_V6)
+        elasticsearch_dsl.connections.add_connection(
+            "pybana-raw", ELASTIC_CLIENTS["v6"]
+        )
         try:
             assert kibana.get_es("pybana-odd") is odd
-            wrapped_direct = kibana.get_es(ELASTICSEARCH_V8)
+            wrapped_direct = kibana.get_es(ELASTIC_CLIENTS["v8"])
             assert isinstance(wrapped_direct, ElasticsearchExtClient)
-            assert wrapped_direct.es is ELASTICSEARCH_V8
+            assert wrapped_direct.es is ELASTIC_CLIENTS["v8"]
             wrapped_named = kibana.get_es("pybana-raw")
             assert isinstance(wrapped_named, ElasticsearchExtClient)
             assert kibana.get_es("pybana-raw") is wrapped_named
