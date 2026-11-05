@@ -224,6 +224,13 @@ class MemoryIndex:
         self.aliases: Dict[str, JsonDict] = {}
         self.documents: Dict[str, MemoryDocument] = {}
         self.closed = False
+        self._seq = 0
+
+    def next_seq(self) -> int:
+        """Next per-index sequence number. Elasticsearch starts at 0."""
+        current = self._seq
+        self._seq += 1
+        return current
 
 
 class ElasticMemory:
@@ -241,6 +248,18 @@ class ElasticMemory:
     def next_seq(self) -> int:
         self._seq += 1
         return self._seq
+
+    def _assign_seq(self, meta: MemoryIndex, seq_no: Optional[int]) -> int:
+        """Assign a shard sequence number, starting at 0 on each index."""
+        if seq_no is None:
+            seq_no = meta.next_seq()
+        else:
+            seq_no = int(seq_no)
+            if seq_no >= meta._seq:
+                meta._seq = seq_no + 1
+        if seq_no > self._seq:
+            self._seq = seq_no
+        return seq_no
 
     def add_index(
         self,
@@ -281,12 +300,7 @@ class ElasticMemory:
         current = meta.documents.get(doc_id)
         if version is None:
             version = current.version + 1 if current else 1
-        if seq_no is None:
-            seq_no = self.next_seq()
-        else:
-            seq_no = int(seq_no)
-            if seq_no > self._seq:
-                self._seq = seq_no
+        seq_no = self._assign_seq(meta, seq_no)
         document = MemoryDocument(
             doc_id=doc_id,
             source=copy.deepcopy(source or {}),
@@ -2329,7 +2343,7 @@ class MockElasticsearchPolluxClient(
             source=copy.deepcopy(source or {}),
             doc_type=doc_type or "_doc",
             version=assigned,
-            seq_no=self.memory.next_seq(),
+            seq_no=self.memory._assign_seq(meta, None),
         )
         meta.documents[doc_id] = document
         return {
@@ -2439,8 +2453,9 @@ class MockElasticsearchPolluxClient(
         kwargs = dict(kwargs)
         if self.version_major >= 7:
             version = kwargs.get("version")
-            if version and isinstance(version, int):
-                kwargs["version"] = version + 1
+            if version:
+                if isinstance(version, int):
+                    kwargs["version"] = version + 1
                 kwargs["version_type"] = kwargs.get("version_type", "external")
         if index not in self.memory.indices and not self.indices.exists(index):
             return _raise(

@@ -1116,6 +1116,17 @@ class TestMockElasticsearchPolluxClient(unittest.TestCase):
         external = client.index("docs", "span", {"name": "ext"}, id="ext", version=3)
         self.assertEqual(external["_version"], 3)
 
+        fresh = MockElasticsearchPolluxClient()
+        fresh.indices.create("seq")
+        first = fresh.index("seq", "span", {"a": 1}, id="1")
+        second = fresh.index("seq", "span", {"a": 2}, id="2")
+        self.assertEqual(first["_seq_no"], 0)
+        self.assertEqual(second["_seq_no"], 1)
+        fresh.index("other", "span", {"a": 1}, id="1")
+        self.assertEqual(fresh.get("other", "span", "1")["_seq_no"], 0)
+        with self.assertRaises(ConflictError):
+            fresh.delete("seq", "span", "1", version="1")
+
         client.indices.create("i1")
         client.indices.create("i2")
         client.indices.put_alias(index=["i1", "i2"], name="both")
