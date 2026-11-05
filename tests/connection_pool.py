@@ -29,8 +29,8 @@ if allow_es():
     )
     ELASTIC_CLIENTS["v8"] = ElasticsearchExtClient(ELASTIC_ORIGINS["v8"])
     ELASTIC_CLIENTS["default"] = ELASTIC_CLIENTS["v8"]
-    ELASTIC_ORIGINS['v6'] = elasticsearch.Elasticsearch(timeout=10)
-    ELASTIC_CLIENTS['v6'] = ElasticsearchExtClient(ELASTIC_ORIGINS['v6'])
+    ELASTIC_ORIGINS["v6"] = elasticsearch.Elasticsearch(timeout=10)
+    ELASTIC_CLIENTS["v6"] = ElasticsearchExtClient(ELASTIC_ORIGINS["v6"])
 else:
     ELASTIC_CLIENTS["default"] = MockElasticsearchPolluxClient()
 
