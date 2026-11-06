@@ -1,0 +1,15 @@
+# Configuration par défaut recommandée pour Codecov
+coverage:
+  status:
+    project:
+      default:
+        target: auto  # La cible s'adapte à la couverture actuelle
+        threshold: 1% # Tolère une baisse maximale de 1% avant d'échouer le build GitHub/Travis
+    patch:
+      default:
+        target: auto
+        output: diff
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default

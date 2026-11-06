@@ -910,6 +910,62 @@ class TestMockElasticsearchPolluxClient(unittest.TestCase):
         self.assertEqual(aggs["all_docs"]["doc_count"], 4)
         self.assertEqual(aggs["unknown"], {})
 
+    def test_histogram_range_top_hits_and_bucket_pipeline(self):
+        client = MockElasticsearchPolluxClient(
+            documents={
+                "events": {
+                    "a": {"ts": "2019-01-01T00:30:00", "n": 1, "s": "a"},
+                    "b": {"ts": "2019-01-01T01:10:00", "n": 3, "s": "b"},
+                    "c": {"ts": "2019-01-01T01:40:00", "n": 5, "s": "b"},
+                }
+            }
+        )
+        found = client.search(
+            index="events",
+            body={
+                "size": 0,
+                "aggs": {
+                    "by_hour": {
+                        "date_histogram": {
+                            "field": "ts",
+                            "calendar_interval": "1h",
+                        },
+                        "aggs": {"avg_n": {"avg": {"field": "n"}}},
+                    },
+                    "by_range": {
+                        "range": {
+                            "field": "n",
+                            "ranges": [{"from": 0, "to": 4}, {"from": 4, "to": 10}],
+                        }
+                    },
+                    "stats": {"extended_stats": {"field": "n"}},
+                    "median": {"percentiles": {"field": "n", "percents": [50]}},
+                    "top": {
+                        "top_hits": {
+                            "size": 1,
+                            "sort": {"n": {"order": "desc"}},
+                            "_source": "s",
+                        }
+                    },
+                    "avg_of_hours": {"avg_bucket": {"buckets_path": "by_hour>_count"}},
+                },
+            },
+        )
+        aggs = found["aggregations"]
+        self.assertEqual(
+            [bucket["doc_count"] for bucket in aggs["by_hour"]["buckets"]], [1, 2]
+        )
+        self.assertEqual(aggs["by_hour"]["buckets"][0]["avg_n"]["value"], 1)
+        self.assertEqual(
+            [bucket["doc_count"] for bucket in aggs["by_range"]["buckets"]], [2, 1]
+        )
+        self.assertEqual(aggs["by_range"]["buckets"][0]["key"], "0.0-4.0")
+        self.assertEqual(aggs["stats"]["count"], 3)
+        self.assertIn("std_deviation", aggs["stats"])
+        self.assertIn("50.0", aggs["median"]["values"])
+        self.assertEqual(aggs["top"]["hits"]["hits"][0]["_source"], {"s": "b"})
+        self.assertEqual(aggs["avg_of_hours"]["value"], 1.5)
+
     def test_scripts_update_and_version_conflicts(self):
         client = MockElasticsearchPolluxClient()
         client.index("docs", "span", {"name": "ada", "n": 1}, id="1")
@@ -1059,6 +1115,17 @@ class TestMockElasticsearchPolluxClient(unittest.TestCase):
         )
         external = client.index("docs", "span", {"name": "ext"}, id="ext", version=3)
         self.assertEqual(external["_version"], 3)
+
+        fresh = MockElasticsearchPolluxClient()
+        fresh.indices.create("seq")
+        first = fresh.index("seq", "span", {"a": 1}, id="1")
+        second = fresh.index("seq", "span", {"a": 2}, id="2")
+        self.assertEqual(first["_seq_no"], 0)
+        self.assertEqual(second["_seq_no"], 1)
+        fresh.index("other", "span", {"a": 1}, id="1")
+        self.assertEqual(fresh.get("other", "span", "1")["_seq_no"], 0)
+        with self.assertRaises(ConflictError):
+            fresh.delete("seq", "span", "1", version="1")
 
         client.indices.create("i1")
         client.indices.create("i2")
@@ -1486,6 +1553,95 @@ class TestMockElasticsearchPolluxClient(unittest.TestCase):
             [doc.id for doc in _sort_documents([same, twin], ["k"])], ["1", "1"]
         )
         self.assertIsNone(_metric("unknown", [same], "k"))
+
+    def test_calendar_floors_keyed_filters_and_unparsed_dates(self):
+        client = MockElasticsearchPolluxClient(
+            documents={
+                "events": {
+                    "a": {
+                        "ts": "2019-05-15T03:05:05.750Z",
+                        "status": "ok",
+                    },
+                    "b": {"ts": "not-a-date", "status": "ko"},
+                }
+            }
+        )
+        found = client.search(
+            index="events",
+            body={
+                "size": 0,
+                "aggs": {
+                    "seconds": {
+                        "date_histogram": {
+                            "field": "ts",
+                            "calendar_interval": "2s",
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "minutes": {
+                        "date_histogram": {
+                            "field": "ts",
+                            "calendar_interval": "2m",
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "hours": {
+                        "date_histogram": {
+                            "field": "ts",
+                            "calendar_interval": "2h",
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "days": {
+                        "date_histogram": {
+                            "field": "ts",
+                            "calendar_interval": "2d",
+                            "min_doc_count": 1,
+                        }
+                    },
+                    "by_status": {
+                        "filters": {
+                            "filters": {
+                                "ok": {"term": {"status": "ok"}},
+                                "ko": {"term": {"status": "ko"}},
+                            }
+                        }
+                    },
+                    "when": {
+                        "date_range": {
+                            "field": "ts",
+                            "ranges": [
+                                {
+                                    "key": "may",
+                                    "from": "2019-05-15T00:00:00Z",
+                                    "to": "2019-05-16T00:00:00Z",
+                                }
+                            ],
+                        }
+                    },
+                },
+            },
+        )
+        aggs = found["aggregations"]
+        self.assertEqual(
+            aggs["seconds"]["buckets"][0]["key_as_string"],
+            "2019-05-15T03:05:04.000Z",
+        )
+        self.assertEqual(
+            aggs["minutes"]["buckets"][0]["key_as_string"],
+            "2019-05-15T03:04:00.000Z",
+        )
+        self.assertEqual(
+            aggs["hours"]["buckets"][0]["key_as_string"],
+            "2019-05-15T02:00:00.000Z",
+        )
+        self.assertEqual(
+            aggs["days"]["buckets"][0]["key_as_string"],
+            "2019-05-14T00:00:00.000Z",
+        )
+        self.assertEqual(aggs["by_status"]["buckets"]["ok"]["doc_count"], 1)
+        self.assertEqual(aggs["by_status"]["buckets"]["ko"]["doc_count"], 1)
+        self.assertEqual(aggs["when"]["buckets"][0]["doc_count"], 1)
 
 
 if __name__ == "__main__":

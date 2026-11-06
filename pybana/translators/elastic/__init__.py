@@ -124,7 +124,7 @@ class ElasticTranslator:
         fields = {field["name"]: field for field in json.loads(ip["fields"])}
         index = ip["title"]
         ts = ip["timeFieldName"]
-        search = elasticsearch_dsl.Search(index=index).filter(
+        search = elasticsearch_dsl.Search(index=index, using=self._using).filter(
             "range",
             **{ts: {"gte": scope.beg.isoformat(), "lte": scope.end.isoformat()}}
         )
