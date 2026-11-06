@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import elasticsearch
 import elasticsearch_dsl
 
@@ -41,3 +41,12 @@ for k, v in ELASTIC_CLIENTS.items():
 
 def get_allowed_versions(versions: List[str] = ["mock", "v6", "v8"]) -> List[str]:
     return [version for version in versions if version in ELASTIC_CLIENTS]
+
+
+def get_versions_and_cache(
+    versions: List[str] = ["mock", "v6", "v8"]
+) -> List[Tuple[str, bool]]:
+    versions_and_cache: List[Tuple[str, bool]] = []
+    for version in get_allowed_versions(versions=versions):
+        versions_and_cache.extend([(version, False), (version, True)])
+    return versions_and_cache

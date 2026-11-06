@@ -24,7 +24,7 @@ from pybana import (  # noqa: E402
 from pybana.elastic.mock_elastic_client import (  # noqa: E402
     MockElasticsearchPolluxClient,
 )
-from pybana.models import Config  # noqa: E402
+from pybana.models import Config, Visualization  # noqa: E402
 from pybana.translators.elastic.buckets import (  # noqa: E402
     format_from_interval,
     compute_auto_interval,
@@ -36,14 +36,18 @@ from tests.connection_pool import (  # noqa: E402
     ELASTIC_CLIENTS,
     ELASTIC_ORIGINS,
     get_allowed_versions,
+    get_versions_and_cache
 )
 from parameterized import parameterized  # noqa: E402
 from pybana.elastic.elastic_client_interface import ESClientInterface  # noqa: E402
 
 PYBANA_INDEX = ".kibana_pybana_test"
 
+for k, v in ELASTIC_CLIENTS.items():
+    elasticsearch_dsl.connections.add_connection(k, v)
 
-def load_fixtures(elastic, kibana, index):
+
+def _load_fixtures(elastic, kibana, index):
     print(f"load_fixtures({elastic}, {kibana}, {index})")
     for realindex in elastic.indices.get(index, ignore_unavailable=True):
         elastic.indices.delete(realindex)
@@ -63,7 +67,7 @@ def load_fixtures(elastic, kibana, index):
     elastic.helpers_bulk(actions(), refresh="wait_for")
 
 
-def load_data(elastic, index):
+def _load_data(elastic, index):
     ts = datetime.datetime(2019, 1, 1)
     if elastic.indices.exists(index):
         elastic.indices.delete(index)
@@ -104,31 +108,34 @@ def load_data(elastic, index):
     elasticsearch.helpers.bulk(elastic, actions(), refresh="wait_for")
 
 
-def init_kibana_fixtures(version: str):
-    kibana = Kibana(index=PYBANA_INDEX, using=version)
+def _initialize_data(version: str, pybana_index: str):
+    kibana = Kibana(index=pybana_index, using=version)
     elastic = ELASTIC_CLIENTS[version]
-    elastic.indices.delete(f"{PYBANA_INDEX}*")
-    elastic.indices.create(f"{PYBANA_INDEX}_1")
-    load_fixtures(elastic, kibana, PYBANA_INDEX)
-    load_data(elastic, "pybana")
+    elastic.indices.delete(f"{pybana_index}*")
+    elastic.indices.create(f"{pybana_index}_1")
+    _load_fixtures(elastic, kibana, pybana_index)
+    _load_data(elastic, "pybana")
     kibana.init_config()
     kibana.init_config()
     assert kibana.config()
 
 
-def get_clients(version):
-    kibana = Kibana(index=PYBANA_INDEX, using=version)
+def _get_clients(version, start_cache, pybana_postfix):
+    pybana_index = f".kibana_pybana_t_{pybana_postfix}".lower()
+    _initialize_data(version, pybana_index)
+    kibana = Kibana(index=pybana_index, using=version, start_cache=start_cache)
     elastic = ELASTIC_CLIENTS[version]
     assert kibana.config()
     return elastic, kibana
 
 
-class PybanaTest(unittest.TestCase):
+class TestPybana:
 
-    @parameterized.expand(get_allowed_versions())
-    def test_client(self, version):
-        init_kibana_fixtures(version)
-        elastic, kibana = get_clients(version)
+    @parameterized.expand(get_versions_and_cache())
+    def test_client(self, version, start_cache):
+        elastic, kibana = _get_clients(
+            version, start_cache, f"client_{'c' if start_cache else 's'}"
+        )
         assert len(list(kibana.index_patterns())) == 1
         index_pattern = kibana.index_pattern("6c172f80-fb13-11e9-84e4-078763638bf3")
         index_pattern.fields
@@ -138,6 +145,10 @@ class PybanaTest(unittest.TestCase):
         kibana.update_or_create_default_index_pattern(index_pattern)
         visualizations = list(kibana.visualizations().scan())
         assert len(visualizations) == 34
+        visu2 = kibana.all_visualizations()
+        assert len(visu2) == 34
+        assert isinstance(visu2[0], Visualization)
+        assert isinstance(visualizations[0], Visualization)
         visualization = kibana.visualization("6eab7cb0-fb18-11e9-84e4-078763638bf3")
         visualization.visState
         visualization.uiStateJSON
@@ -159,18 +170,20 @@ class PybanaTest(unittest.TestCase):
         with pytest.raises(ValueError):
             visualization.index(using=elastic).meta.id
 
-    @parameterized.expand(get_allowed_versions())
-    def test_translators(self, version):
-        init_kibana_fixtures(version)
-        # elasticsearch_dsl.connections.add_connection("default", ELASTIC_V8)
-
+    @parameterized.expand(get_versions_and_cache())
+    def test_translators(self, version, start_cache):
+        _initialize_data(
+            version,
+            PYBANA_INDEX,  # f".kibana_pybana_translators_{'c' if start_cache else 's'}"
+        )
         kibana = Kibana(
             index=PYBANA_INDEX,
             using=elasticsearch_dsl.connections.get_connection(version),
+            start_cache=start_cache,
         )
         elastic = ELASTIC_CLIENTS[version]
-        load_fixtures(elastic, kibana, PYBANA_INDEX)
-        load_data(elastic, "pybana")
+        _load_fixtures(elastic, kibana, PYBANA_INDEX)
+        _load_data(elastic, "pybana")
         assert isinstance(elastic, ESClientInterface)
 
         kibana.init_config()
@@ -283,13 +296,14 @@ class PybanaTest(unittest.TestCase):
                         == 0
                     )
 
-    @parameterized.expand(get_allowed_versions())
-    def test_vega_visualization(self, version):
-        kibana = Kibana(index=PYBANA_INDEX, using=version)
+    @parameterized.expand(get_versions_and_cache())
+    def test_vega_visualization(self, version: str, start_cache):
+        pybana_index = f".kibana_pybana_vega_visu_{'c' if start_cache else 's'}"
+        kibana = Kibana(index=pybana_index, using=version)
         elastic = ELASTIC_CLIENTS[version]
 
-        load_fixtures(elastic, kibana, PYBANA_INDEX)
-        load_data(elastic, "pybana")
+        _load_fixtures(elastic, kibana, pybana_index)
+        _load_data(elastic, "pybana")
         kibana.init_config()
         translator = ElasticTranslator(using=elastic)
         scope = Scope(
@@ -313,9 +327,14 @@ class PybanaTest(unittest.TestCase):
             response = search.execute()
             VegaTranslator(using=elastic).translate(visualization, response, scope)
 
-    @parameterized.expand(get_allowed_versions())
-    def test_vega_renderer_momentFormat(self, version):
-        elastic, kibana = get_clients(version)
+    @parameterized.expand(get_versions_and_cache())
+    def vega_renderer_momentFormat(self, version: str, start_cache):
+        pybana_postfix = (
+            f".kibana_pybana_vega_render_momentfmt_{'c' if start_cache else 's'}"
+        )
+        _, kibana = _get_clients(
+            version, start_cache=start_cache, pybana_postfix=pybana_postfix
+        )
 
         # Test renderer MomentFormat
         visualization = kibana.visualization("33788540-f67f-11ee-ba56-1101ab5c82ed")
@@ -419,24 +438,23 @@ class PybanaTest(unittest.TestCase):
         assert dt.convert("[coucou] Y"), "[coucou] Y"
         assert dt.convert("[a [coucou]]"), "[a [coucou]]"
 
-    @parameterized.expand(get_allowed_versions(versions=["v8"]) or ["skip"])
+    @parameterized.expand(get_allowed_versions(versions=["v8"]) or ["ignore"])
     def test_get_es_wraps_unextended_clients(self, version):
-        if version == "skip":
-            self.skipTest("test function not working for mock")
-        if "v6" not in ELASTIC_CLIENTS:
-            self.skipTest("v6 not installed")
+        if version == "ignore":  # due to issue on skip on empty
+            return
         assert version == "v8"
-        kibana = Kibana(using=ELASTIC_ORIGINS["v8"], index=PYBANA_INDEX)
+        es = ELASTIC_ORIGINS["v8"]
+        kibana = Kibana(using=es, index=PYBANA_INDEX)
         odd = object()
         elasticsearch_dsl.connections.add_connection("pybana-odd", odd)
         elasticsearch_dsl.connections.add_connection(
-            "pybana-raw", ELASTIC_CLIENTS["v6"]
+            "pybana-raw", ELASTIC_ORIGINS["v6"]
         )
         try:
             assert kibana.get_es("pybana-odd") is odd
-            wrapped_direct = kibana.get_es(ELASTIC_CLIENTS["v8"])
+            wrapped_direct = kibana.get_es(es)
             assert isinstance(wrapped_direct, ElasticsearchExtClient)
-            assert wrapped_direct.es is ELASTIC_ORIGINS["v8"]
+            assert wrapped_direct.es is es
             wrapped_named = kibana.get_es("pybana-raw")
             assert isinstance(wrapped_named, ElasticsearchExtClient)
             assert kibana.get_es("pybana-raw") is wrapped_named
@@ -444,9 +462,10 @@ class PybanaTest(unittest.TestCase):
             elasticsearch_dsl.connections.remove_connection("pybana-odd")
             elasticsearch_dsl.connections.remove_connection("pybana-raw")
 
-    def test_is_v8_and_visualization_mapping_repair(self):
+    @parameterized.expand([False, True])
+    def test_is_v8_and_visualization_mapping_repair(self, start_cache):
         elastic = MockElasticsearchPolluxClient()
-        kibana = Kibana(using=elastic, index=".kibana")
+        kibana = Kibana(using=elastic, index=".kibana", start_cache=start_cache)
         assert kibana.using is elastic
         assert kibana.is_v8() is True
         assert kibana.visualization_mapping_needs_update() is False
@@ -510,10 +529,11 @@ class PybanaTest(unittest.TestCase):
         assert incomplete.get(".kibana", "doc", "visualization:1")["found"] is True
         assert repaired.visualization_mapping_needs_update() is False
 
-    def test_config_falls_back_to_same_major_version(self):
+    @parameterized.expand([False, True])
+    def test_config_falls_back_to_same_major_version(self, start_cache):
         elastic = MockElasticsearchPolluxClient()
         elastic.memory.add_index(".kibana")
-        kibana = Kibana(using=elastic, index=".kibana")
+        kibana = Kibana(using=elastic, index=".kibana", start_cache=start_cache)
         with pytest.raises(NotFoundError):
             kibana.config()
 
