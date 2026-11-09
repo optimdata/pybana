@@ -12,6 +12,7 @@ from unittest.mock import patch  # noqa: E402
 from elasticsearch.exceptions import TransportError  # noqa: E402
 from elasticsearch.helpers import scan  # noqa: E402
 from elasticsearch.exceptions import ConflictError  # noqa: E402
+from parameterized import parameterized  # noqa: E402
 from pybana.elastic import elastic_client as elastic_client_module  # noqa: E402
 from pybana.elastic.elastic_client import (  # noqa: E402
     ElasticsearchExt,
@@ -19,6 +20,8 @@ from pybana.elastic.elastic_client import (  # noqa: E402
     _get_scroll_id,
     _get_scroll_ids,
 )  # noqa: E402
+
+from tests.connection_pool import get_allowed_versions, ELASTIC_CLIENTS  # noqa: E402
 
 # from ..client.base import JSONSerializer
 from pybana.elastic.fixes_for_v8 import (  # noqa: E402
@@ -562,32 +565,24 @@ class TestScrollsCache(unittest.TestCase):
 
 
 class TestElaticsearchClientCase(unittest.TestCase):
-    def test_simple_es_ops_primary(self):
-        self.simple_es_operations("http://localhost:9200")
 
-    def test_simple_es_ops_secondary(self):
-        self.simple_es_operations("http://localhost:9201")
+    @parameterized.expand(get_allowed_versions(versions=["v6", "v8"]) or ["skip"])
+    def test_scroll_non_dict_response(self, version):
+        if version == "skip":
+            self.skipTest("test function not working for mock")
 
-    def test_scroll_ops_process_primary(self):
-        self.scroll_ops_process("http://localhost:9200")
-
-    def test_scroll_ops_process_secondary(self):
-        self.scroll_ops_process("http://localhost:9201")
-
-    def test_extended_ops_secondary(self):
-        self.extended_client_operations("http://localhost:9201")
-
-    def test_scroll_non_dict_response(self):
-        elastic = ElasticsearchExt(hosts=["http://localhost:9200"], timeout=10)
+        elastic = ElasticsearchExt(
+            hosts=[
+                "http://localhost:9200" if version == "v6" else "http://localhost:9201"
+            ],
+            timeout=10,
+        )
         elastic.es.transport.perform_request = lambda *args, **kwargs: "raw"
         self.assertEqual(elastic.scroll(body={"scroll_id": None}), "raw")
 
-    def scroll_ops_process(self, host: str):
-        elastic = ElasticsearchExt(
-            hosts=[host],
-            # serializer=JSONSerializer(),
-            timeout=10,
-        )
+    @parameterized.expand(get_allowed_versions())
+    def test_scroll_ops_process(self, version):
+        elastic = ELASTIC_CLIENTS[version]
         index = "test_scroll_ops"
         # step 1: create index
         elastic.indices.delete(f"{index}*")
@@ -621,12 +616,9 @@ class TestElaticsearchClientCase(unittest.TestCase):
         )
         # assert False
 
-    def simple_es_operations(self, host: str):
-        elastic = ElasticsearchExt(
-            hosts=[host],
-            # serializer=JSONSerializer(),
-            timeout=10,
-        )
+    @parameterized.expand(get_allowed_versions())
+    def test_simple_es_operations(self, version: str):
+        elastic = ELASTIC_CLIENTS[version]
         index = "test_simple_es_operations"
         elastic.indices.delete(f"{index}*")
         elastic.indices.create(f"{index}_1")
@@ -656,8 +648,9 @@ class TestElaticsearchClientCase(unittest.TestCase):
         except TransportError as e:
             assert "index_not_found_exception" in str(e)
 
-    def extended_client_operations(self, host: str):
-        elastic = ElasticsearchExt(hosts=[host], timeout=10)
+    @parameterized.expand(get_allowed_versions(versions=["mock", "v8"]))
+    def test_extended_client_operations(self, version: str):
+        elastic = ELASTIC_CLIENTS[version]
         index = "test_elastic_client_ext"
         dest = index + "_dest"
         alias = index + "_alias"
@@ -858,8 +851,14 @@ class TestElaticsearchClientCase(unittest.TestCase):
         finally:
             self._cleanup_extended(elastic, index, dest, template, pipeline)
 
-    def test_legacy_major_version_paths(self):
-        elastic = ElasticsearchExt(["http://localhost:9200"])
+    @parameterized.expand(get_allowed_versions(versions=["v6"]) or ["skip"])
+    def test_legacy_major_version_paths(self, version: str):
+        if version == "skip":
+            self.skipTest("test function not working for mock")
+        elastic = ElasticsearchExt(
+            ["http://localhost:9200" if version == "v6" else "http://localhost:9201"],
+            timeout=10,
+        )
         elastic._version_major = 6
         calls = {}
 

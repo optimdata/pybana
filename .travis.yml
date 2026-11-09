@@ -36,8 +36,10 @@ jobs:
         #- npm i vega@5.25.0
 
       script:
+        - set -e
         - flake8 .
         - black --check .
+        - SKIP_ES=TRUE pytest # quick test without calling elastic real, should fail more quickly (3.5s vs 120s)
         - pytest
         - coverage xml -o coverage.xml
 
