@@ -212,7 +212,7 @@ class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
             using=using,
         )
 
-    def index(self, using, raise_error=True, kibana: Optional[KibanaInterface] = None):
+    def index(self, using=None, raise_error=True, kibana: Optional[KibanaInterface] = None):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
