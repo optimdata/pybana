@@ -2,7 +2,6 @@
 
 import os
 import sys
-import unittest
 
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
@@ -36,7 +35,7 @@ from tests.connection_pool import (  # noqa: E402
     ELASTIC_CLIENTS,
     ELASTIC_ORIGINS,
     get_allowed_versions,
-    get_versions_and_cache
+    get_versions_and_cache,
 )
 from parameterized import parameterized  # noqa: E402
 from pybana.elastic.elastic_client_interface import ESClientInterface  # noqa: E402

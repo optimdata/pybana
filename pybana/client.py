@@ -3,7 +3,7 @@
 import copy
 import json
 import os
-from typing import Dict, List, Optional, TypeVar, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from elasticsearch import NotFoundError, Elasticsearch
 import elasticsearch_dsl
@@ -17,13 +17,13 @@ from .models import (
     Dashboard,
     DataView,
     IndexPattern,
+    KibanaInterface,
     Visualization,
     Search,
+    DocumentT,
 )
 
 __all__ = ("Kibana",)
-
-T = TypeVar("T", bound=BaseDocument)  # the variable name must coincide with the string
 
 
 DEFAULT_CONFIG = {
@@ -66,28 +66,35 @@ class _DocumentsCache:
     def clear(self):
         self._cache.clear()
 
-    def _read_subcache(self, klass: type[T]) -> Optional[Dict[str, Optional[T]]]:
+    def _read_subcache(
+        self, klass: type[DocumentT]
+    ) -> Optional[Dict[str, Optional[DocumentT]]]:
         return self._cache.get(klass._type)
 
-    def _write_subcache(self, klass: type[T]) -> Dict[str, Optional[T]]:
+    def _write_subcache(self, klass: type[DocumentT]) -> Dict[str, Optional[DocumentT]]:
         key = klass._type
         if key not in self._cache:
             self._cache[key] = {}
         return self._cache[key]
 
-    # klass: type[T], ids: Optional[List[str]] = None) -> List[T]:
-    def get(self, klass: type[T], key: str) -> Tuple[bool, Optional[T]]:
+    # klass: type[DocumentT], ids: Optional[List[str]] = None) -> List[DocumentT]:
+    def get(self, klass: type[DocumentT], key: str) -> Tuple[bool, Optional[DocumentT]]:
         assert ":" not in key
         sub_cache = self._read_subcache(klass)
         if sub_cache is None:
             return False, None
-        return key in sub_cache, sub_cache.get(key)
+        if key in sub_cache:
+            return True, sub_cache.get(key)
+        else:
+            return "*" in sub_cache, None
 
-    def get_multi(self, klass: type[T], keys: List[str]) -> Tuple[List[T], List[str]]:
+    def get_multi(
+        self, klass: type[DocumentT], keys: List[str]
+    ) -> Tuple[List[DocumentT], List[str]]:
         sub_cache = self._read_subcache(klass)
         if sub_cache is None:
             return [], keys
-        documents: List[T] = []
+        documents: List[DocumentT] = []
         not_founds: List[str] = []
         for key in keys:
             assert ":" not in key
@@ -100,31 +107,35 @@ class _DocumentsCache:
                     documents.append(document)
         return documents, not_founds
 
-    def get_all(self, klass: type[T]) -> Optional[List[T]]:
+    def get_all(self, klass: type[DocumentT]) -> Optional[List[DocumentT]]:
         sub_cache = self._read_subcache(klass)
         if sub_cache is None:
             return None
         return [v for v in sub_cache.values() if v is not None]
 
-    def set(self, klass: type[T], key: str, document: Optional[T]) -> Optional[T]:
+    def set(
+        self, klass: type[DocumentT], key: str, document: Optional[DocumentT]
+    ) -> Optional[DocumentT]:
         assert ":" not in key
         sub_cache = self._write_subcache(klass)
         sub_cache[key] = document
         return document
 
-    def delete_all(self, klass: type[T]):
+    def delete_all(self, klass: type[DocumentT]):
         self._cache.pop(klass._type, None)
 
-    def set_all(self, klass: type[T], documents: List[T]) -> List[T]:
+    def set_all(
+        self, klass: type[DocumentT], documents: List[DocumentT]
+    ) -> List[DocumentT]:
         self.delete_all(klass)
         self.set_multi(klass=klass, documents=documents)
-        self.set(klass=klass, key=".*", document=None)
+        self.set(klass=klass, key="*", document=None)
         return documents
 
     def set_multi(
         self,
-        klass: type[T],
-        documents: List[T],
+        klass: type[DocumentT],
+        documents: List[DocumentT],
         wished_ids: Optional[Set[str]] = None,
     ) -> List[str]:
         ids = []
@@ -135,7 +146,7 @@ class _DocumentsCache:
             assert parts[0] == klass._type
             key = parts[1]
             assert bool(key)
-            assert key != ".*"
+            assert key != "*"
             if wished_ids is not None:
                 assert key in wished_ids
             ids.append(key)
@@ -149,9 +160,9 @@ class _DocumentsCache:
         return ids
 
 
-class Kibana:
+class Kibana(KibanaInterface):
     """
-    Kibana client (with support of multi elasticsearch).
+    Kibana client (with support of multi elasticsearch).exi
     """
 
     klasses = {
@@ -206,37 +217,41 @@ class Kibana:
         if self._cache is not None:
             self._cache.clear()
 
-    def _cache_get(self, klass: type[T], key: str) -> Tuple[bool, Optional[T]]:
+    def _cache_get(
+        self, klass: type[DocumentT], key: str
+    ) -> Tuple[bool, Optional[DocumentT]]:
         return (False, None) if self._cache is None else self._cache.get(klass, key)
 
     def _cache_get_multi(
-        self, klass: type[T], keys: List[str]
-    ) -> Tuple[List[T], List[str]]:
+        self, klass: type[DocumentT], keys: List[str]
+    ) -> Tuple[List[DocumentT], List[str]]:
         return ([], keys) if not self._cache else self._cache.get_multi(klass, keys)
 
-    def _cache_get_all(self, klass: type[T]) -> Optional[List[T]]:
+    def _cache_get_all(self, klass: type[DocumentT]) -> Optional[List[DocumentT]]:
         return None if not self._cache else self._cache.get_all(klass)
 
     def _cache_set(
-        self, klass: type[T], key: str, document: Optional[T]
-    ) -> Optional[T]:
+        self, klass: type[DocumentT], key: str, document: Optional[DocumentT]
+    ) -> Optional[DocumentT]:
         return (
             document if self._cache is None else self._cache.set(klass, key, document)
         )
 
-    def _cache_delete_all(self, klass: type[T]):
+    def _cache_delete_all(self, klass: type[DocumentT]):
         if self._cache is not None:
             self._cache.delete_all(klass)
 
-    def _cache_set_all(self, klass: type[T], documents: List[T]) -> List[T]:
+    def _cache_set_all(
+        self, klass: type[DocumentT], documents: List[DocumentT]
+    ) -> List[DocumentT]:
         return (
             documents if self._cache is None else self._cache.set_all(klass, documents)
         )
 
     def _cache_set_multi(
         self,
-        klass: type[T],
-        documents: List[T],
+        klass: type[DocumentT],
+        documents: List[DocumentT],
         wished_ids: Optional[Set[str]] = None,
     ) -> List[str]:
         return (
@@ -249,15 +264,15 @@ class Kibana:
     def using(self):
         return self._default
 
-    def _search(self, type, using):
+    def _search(self, type, using=None):
         klass = self.klasses.get(type)
         search = klass.search if klass else elasticsearch_dsl.Search
         es = self.get_es(using)
         return search(index=self._index, using=es)
 
-    def _get(
-        self, klass: type[T], id: str, using, raise_on_missing=True
-    ) -> Optional[T]:
+    def get_document(
+        self, klass: type[DocumentT], id: str, using=None, raise_on_missing=True
+    ) -> Optional[DocumentT]:
         found, document = self._cache_get(klass, id)
         if found:
             if document is None and raise_on_missing:
@@ -282,7 +297,12 @@ class Kibana:
     def objects(self, type, using=None):
         return self._search(type, using=using).filter("term", type=type)
 
-    def all_documents(self, klass: type[T], ids: Optional[List[str]] = None) -> List[T]:
+    def all_documents(
+        self,
+        klass: type[DocumentT],
+        ids: Optional[List[str]] = None,
+        raise_on_missing=True,
+    ) -> List[DocumentT]:
         if ids is None:
             values = self._cache_get_all(klass=klass)
             if values is not None:
@@ -294,26 +314,43 @@ class Kibana:
         if not ids:
             return []
         documents, short_ids = self._cache_get_multi(
-            klass=klass, keys=[id.split(":")[-1] for id in ids]
+            klass=klass,
+            keys=[id.split(":")[-1] for id in ids],
         )
         doc_ids = [f"{klass._type}:{id}" for id in short_ids]
         if not doc_ids:
             return documents
 
-        response = self.get_es(using=None).mget(
-            body={"ids": doc_ids}, index=self._index, doc_type="doc"
-        )
+        # raise RuntimeError(f"shouldn't arrive here: {self._cache}")
+        try:
 
-        for doc in response.get("docs", []):
-            if not doc.get("found"):
-                continue
-            # ES 7+ mget hits have no ``_type``; elasticsearch-dsl 6 expects one.
-            if "_type" not in doc:
-                doc["_type"] = "doc"
-            document = self._cache_set(klass=klass, key="", document=klass.from_es(doc))
-            if document is not None:
-                documents.append(document)
-        return documents
+            response = self.get_es(using=None).mget(
+                body={"ids": doc_ids}, index=self._index, doc_type="doc"
+            )
+
+            for doc in response.get("docs", []):
+                if not doc.get("found"):
+                    continue
+                # ES 7+ mget hits have no ``_type``; elasticsearch-dsl 6 expects one.
+                if "_type" not in doc:
+                    doc["_type"] = "doc"
+                document = self._cache_set(
+                    klass=klass, key="", document=klass.from_es(doc)
+                )
+                if document is not None:
+                    documents.append(document)
+            return documents
+        except NotFoundError:
+            if raise_on_missing:
+                raise
+            new_documents = [
+                self.get_document(
+                    klass, object_id, raise_on_missing=raise_on_missing, using=None
+                )
+                for object_id in short_ids
+            ]
+            documents.extend(d for d in new_documents if d is not None)
+            return documents
 
     def config_id(self, using=None):
         elastic = self.get_es(using)
@@ -325,7 +362,7 @@ class Kibana:
         """
         config_id = self.config_id(using)
         try:
-            return self._get(
+            return self.get_document(
                 Config,
                 config_id.split(":")[-1],
                 using=using,
@@ -340,7 +377,7 @@ class Kibana:
             for hit in hits:
                 hit_id = hit.meta.id
                 if hit_id.startswith(f"config:{major_version}."):
-                    return self._get(
+                    return self.get_document(
                         Config,
                         hit_id.split(":")[-1],
                         using=using,
@@ -456,14 +493,20 @@ class Kibana:
         """
         return self.objects("index-pattern", using=using)
 
-    def all_index_patterns(self, ids: Optional[List[str]] = None) -> List[IndexPattern]:
-        return self.all_documents(IndexPattern, ids=ids)
+    def all_index_patterns(
+        self, ids: Optional[List[str]] = None, raise_on_missing=True
+    ) -> List[IndexPattern]:
+        return self.all_documents(
+            IndexPattern, ids=ids, raise_on_missing=raise_on_missing
+        )
 
-    def index_pattern(self, id, using=None, raise_on_missing=True) -> IndexPattern:
+    def index_pattern(
+        self, id, using=None, raise_on_missing=True
+    ) -> Optional[IndexPattern]:
         """
         Return a index-pattern identified by its identifier.
         """
-        return self._get(
+        return self.get_document(
             IndexPattern, id, using=using, raise_on_missing=raise_on_missing
         )
 
@@ -473,11 +516,13 @@ class Kibana:
         """
         return self.objects("search", using=using)
 
-    def search(self, id, using=None, raise_on_missing=True) -> Search:
+    def search(self, id, using=None, raise_on_missing=True) -> Optional[Search]:
         """
         Return a index-pattern identified by its identifier.
         """
-        return self._get(Search, id, using=using, raise_on_missing=raise_on_missing)
+        return self.get_document(
+            Search, id, using=using, raise_on_missing=raise_on_missing
+        )
 
     def visualizations(self, using=None):
         """
@@ -488,15 +533,19 @@ class Kibana:
         return self.objects("visualization", using=using)
 
     def all_visualizations(
-        self, ids: Optional[List[str]] = None
+        self, ids: Optional[List[str]] = None, raise_on_missing=True
     ) -> List[Visualization]:
-        return self.all_documents(Visualization, ids=ids)
+        return self.all_documents(
+            Visualization, ids=ids, raise_on_missing=raise_on_missing
+        )
 
-    def visualization(self, id, using=None, raise_on_missing=True) -> Visualization:
+    def visualization(
+        self, id, using=None, raise_on_missing=True
+    ) -> Optional[Visualization]:
         """
         Return a visualization identified by its identifier.
         """
-        return self._get(
+        return self.get_document(
             Visualization, id, using=using, raise_on_missing=raise_on_missing
         )
 
@@ -508,17 +557,21 @@ class Kibana:
         """
         return self.objects("dashboard", using=using)
 
-    def all_dashboards(self, ids: Optional[List[str]] = None) -> List[Dashboard]:
+    def all_dashboards(
+        self, ids: Optional[List[str]] = None, raise_on_missing=True
+    ) -> List[Dashboard]:
         """
         Return a Search to all the index-patterns.
         """
-        return self.all_documents(Dashboard, ids=ids)
+        return self.all_documents(Dashboard, ids=ids, raise_on_missing=raise_on_missing)
 
-    def dashboard(self, id, using=None, raise_on_missing=True) -> Dashboard:
+    def dashboard(self, id, using=None, raise_on_missing=True) -> Optional[Dashboard]:
         """
         Return a dashboard identified by its identifier.
         """
-        return self._get(Dashboard, id, using=using, raise_on_missing=raise_on_missing)
+        return self.get_document(
+            Dashboard, id, using=using, raise_on_missing=raise_on_missing
+        )
 
     def update_or_create_default_index_pattern(self, index_pattern, using=None):
         """

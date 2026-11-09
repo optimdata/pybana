@@ -82,7 +82,7 @@ class TestDocumentsCache(unittest.TestCase):
             ("a:b:c", None),
             ("search:a", None),
             ("visualization:", None),
-            ("visualization:.*", None),
+            ("visualization:*", None),
             ("visualization:a", {"b"}),
         ):
             with pytest.raises(AssertionError):
@@ -103,9 +103,9 @@ class TestDocumentsCache(unittest.TestCase):
         cache.set(Visualization, "stale", first)
         returned = cache.set_all(Visualization, [first, second])
         self.assertEqual(returned, [first, second])
-        self.assertEqual(cache.get(Visualization, "stale"), (False, None))
+        self.assertEqual(cache.get(Visualization, "stale"), (True, None))
         self.assertEqual(cache.get_all(Visualization), [first, second])
-        self.assertEqual(cache.get(Visualization, ".*"), (True, None))
+        self.assertEqual(cache.get(Visualization, "*"), (True, None))
         cache.clear()
         self.assertEqual(cache._cache, {})
         self.assertIsNone(cache.get_all(Visualization))

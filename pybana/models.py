@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import json
+from typing import List, Optional, TypeVar
+from abc import abstractmethod
 
 from elasticsearch import NotFoundError
 from elasticsearch_dsl import Document, Keyword, Search as EsSearch
@@ -16,36 +18,108 @@ __all__ = (
     "DataView",
     "IndexPattern",
     "Visualization",
+    "DocumentT",
     "Dashboard",
     "get_index_pattern_or_data_view",
     "get_index_pattern_or_data_view_flexible",
 )
 
 
-def get_index_pattern_or_data_view(document_id, index, using=None):
+class BaseDocument(Document):
+    type = Keyword()
+    # _using = None
+
+    # List of json attributes.
+    json_attrs = []
+
+    class Meta:
+        doc_type = "doc"
+
+    class Index:
+        # We use elasticsearch_dsl 6.3 behaviour here as we don't know in advance
+        # the name of the kibana index
+        name = "*"
+
+    def __init__(self, **kwargs):
+        super().__init__(type=self._type, **kwargs)
+        self._json_attrs_cache = {}
+
+    def __getattr__(self, key):
+        if key in self.json_attrs:
+            if key not in self._json_attrs_cache:
+                self._json_attrs_cache[key] = json.loads(
+                    self.to_dict()[self._type].get(key, "null")
+                )
+            return self._json_attrs_cache[key]
+        return super().__getattr__(key)
+
+
+DocumentT = TypeVar(
+    "DocumentT", bound=BaseDocument
+)  # the variable name must coincide with the string
+
+
+class KibanaInterface:
+    @abstractmethod
+    def get_document(
+        self, klass: type[DocumentT], id: str, using=None, raise_on_missing=True
+    ) -> Optional[DocumentT]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def all_documents(
+        self,
+        klass: type[DocumentT],
+        ids: Optional[List[str]] = None,
+        raise_on_missing=True,
+    ) -> List[DocumentT]:
+        raise NotImplementedError()
+
+
+def get_index_pattern_or_data_view(
+    document_id, index, using=None, kibana: Optional[KibanaInterface] = None
+):
     """
     Load an index-pattern or data-view saved object by full Elasticsearch document _id.
     """
+    if kibana is not None:
+        assert isinstance(kibana, KibanaInterface)
+        print(f"kibana: {kibana.__class__.__name__}, document_id:{document_id}")
+        if document_id.startswith("data-view:"):
+            return kibana.get_document(
+                klass=DataView, id=document_id.split(":")[-1], raise_on_missing=False
+            )
+        return kibana.get_document(
+            klass=IndexPattern, id=document_id.split(":")[-1], raise_on_missing=False
+        )
     if document_id.startswith("data-view:"):
         return DataView.get(id=document_id, index=index, using=using)
     return IndexPattern.get(id=document_id, index=index, using=using)
 
 
-def get_index_pattern_or_data_view_flexible(raw_ref, index, using=None):
+def get_index_pattern_or_data_view_flexible(
+    raw_ref, index, using=None, kibana: Optional[KibanaInterface] = None
+):
     """
     Resolve an index-pattern or data-view from a raw ``visState`` reference (id or title).
 
     Tries ``index-pattern:{raw_ref}`` and ``data-view:{raw_ref}``, then an exact
     title match on ``index-pattern.title`` / ``data-view.title`` (first hit).
     """
+    assert kibana is None or isinstance(kibana, KibanaInterface)
+
     if not raw_ref:
         return None
     if raw_ref.startswith("data-view:") or raw_ref.startswith("index-pattern:"):
-        return get_index_pattern_or_data_view(raw_ref, index, using=using)
+        return get_index_pattern_or_data_view(
+            raw_ref, index, using=using, kibana=kibana
+        )
     for prefix in ("index-pattern:", "data-view:"):
         doc_id = prefix + raw_ref
         try:
-            return get_index_pattern_or_data_view(doc_id, index, using=using)
+            return get_index_pattern_or_data_view(
+                doc_id, index, using=using, kibana=kibana
+            )
         except NotFoundError:
             pass
     for obj_type, klass in (("index-pattern", IndexPattern), ("data-view", DataView)):
@@ -79,35 +153,6 @@ class KibanaSavedObjectReferencesMixin(object):
         return inst
 
 
-class BaseDocument(Document):
-    type = Keyword()
-    # _using = None
-
-    # List of json attributes.
-    json_attrs = []
-
-    class Meta:
-        doc_type = "doc"
-
-    class Index:
-        # We use elasticsearch_dsl 6.3 behaviour here as we don't know in advance
-        # the name of the kibana index
-        name = "*"
-
-    def __init__(self, **kwargs):
-        super().__init__(type=self._type, **kwargs)
-        self._json_attrs_cache = {}
-
-    def __getattr__(self, key):
-        if key in self.json_attrs:
-            if key not in self._json_attrs_cache:
-                self._json_attrs_cache[key] = json.loads(
-                    self.to_dict()[self._type].get(key, "null")
-                )
-            return self._json_attrs_cache[key]
-        return super().__getattr__(key)
-
-
 class Config(BaseDocument):
     _type = "config"
 
@@ -130,7 +175,9 @@ class DataView(BaseDocument):
 class Search(KibanaSavedObjectReferencesMixin, BaseDocument):
     _type = "search"
 
-    def index(self, using, raise_error=True):
+    def index(
+        self, using=None, raise_error=True, kibana: Optional[KibanaInterface] = None
+    ):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
@@ -144,7 +191,9 @@ class Search(KibanaSavedObjectReferencesMixin, BaseDocument):
                     "Could not resolve data source from searchSourceJSON (missing index / references)"
                 )
             return None
-        return get_index_pattern_or_data_view(doc_id, self.meta.index, using=using)
+        return get_index_pattern_or_data_view(
+            doc_id, self.meta.index, using=using, kibana=kibana
+        )
 
 
 class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
@@ -163,7 +212,7 @@ class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
             using=using,
         )
 
-    def index(self, using, raise_error=True):
+    def index(self, using, raise_error=True, kibana: Optional[KibanaInterface] = None):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
@@ -176,11 +225,13 @@ class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
         refs = getattr(self, "_kibana_references", [])
         doc_id = resolve_index_pattern_document_id(search_source, refs)
         if doc_id:
-            return get_index_pattern_or_data_view(doc_id, self.meta.index, using=using)
+            return get_index_pattern_or_data_view(
+                doc_id, self.meta.index, using=using, kibana=kibana
+            )
         raw = first_input_control_index_pattern_ref(self.visState)
         if raw:
             resolved = get_index_pattern_or_data_view_flexible(
-                raw, self.meta.index, using=using
+                raw, self.meta.index, using=using, kibana=kibana
             )
             if resolved is not None:
                 return resolved
@@ -207,7 +258,9 @@ class Dashboard(BaseDocument):
     _type = "dashboard"
     json_attrs = ["panelsJSON", "optionsJSON"]
 
-    def visualizations(self, *, using, missing="skip"):
+    def visualizations(
+        self, *, using=None, missing="skip", kibana: Optional[KibanaInterface] = None
+    ):
         """
         Does the join automatically by parsing references.
 
@@ -216,15 +269,19 @@ class Dashboard(BaseDocument):
         """
         panels_ref = self.references if hasattr(self, "references") else self.panelsJSON
         panels = [panel for panel in panels_ref if panel.type == "visualization"]
-        return (
-            Visualization.mget(
-                docs=["visualization:" + panel["id"] for panel in panels],
-                index=self.meta.index,
-                missing=missing,
-                using=using,
+        if not panels:
+            return []
+        if missing == "skip" and kibana is not None:
+            return kibana.all_documents(
+                Visualization,
+                ids=[panel["id"] for panel in panels],
+                raise_on_missing=False,
             )
-            if panels
-            else []
+        return Visualization.mget(
+            docs=["visualization:" + panel["id"] for panel in panels],
+            index=self.meta.index,
+            missing=missing,
+            using=using,
         )
 
     def searches(self, *, using, missing="skip"):

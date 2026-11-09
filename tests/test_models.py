@@ -114,11 +114,15 @@ def test_get_index_pattern_or_data_view():
     with patch.object(DataView, "get", return_value="view") as view_get:
         with patch.object(IndexPattern, "get", return_value="pattern") as pattern_get:
             assert (
-                get_index_pattern_or_data_view("data-view:1", ".kibana", using="u")
+                get_index_pattern_or_data_view(
+                    "data-view:1", ".kibana", using="u", kibana=None
+                )
                 == "view"
             )
             assert (
-                get_index_pattern_or_data_view("index-pattern:2", ".kibana", using="u")
+                get_index_pattern_or_data_view(
+                    "index-pattern:2", ".kibana", using="u", kibana=None
+                )
                 == "pattern"
             )
     view_get.assert_called_once_with(id="data-view:1", index=".kibana", using="u")
@@ -154,10 +158,10 @@ def test_flexible_resolution_tries_ids_then_titles():
                 wraps=get_index_pattern_or_data_view,
             ) as wrapped:
                 assert get_index_pattern_or_data_view_flexible(
-                    "data-view:direct", ".kibana", using="u"
+                    "data-view:direct", ".kibana", using="u", kibana=None
                 ) == ("data-view", "data-view:direct", ".kibana", "u")
                 assert get_index_pattern_or_data_view_flexible(
-                    "index-pattern:direct", ".kibana", using="u"
+                    "index-pattern:direct", ".kibana", using="u", kibana=None
                 ) == ("index-pattern", "index-pattern:direct", ".kibana", "u")
                 assert wrapped.call_count == 2
 
@@ -232,7 +236,9 @@ def test_search_index_resolution():
         models, "get_index_pattern_or_data_view", return_value="pattern"
     ) as getter:
         assert saved.index(using="u") == "pattern"
-    getter.assert_called_once_with("index-pattern:logs", ".kibana", using="u")
+    getter.assert_called_once_with(
+        "index-pattern:logs", ".kibana", using="u", kibana=None
+    )
 
     unresolved = Search()
     unresolved.meta.index = ".kibana"
@@ -303,7 +309,7 @@ def test_visualization_index_filters_and_related_search():
         models, "get_index_pattern_or_data_view", return_value="view"
     ) as getter:
         assert referenced.index(using="u") == "view"
-    getter.assert_called_once_with("data-view:dv1", ".kibana", using="u")
+    getter.assert_called_once_with("data-view:dv1", ".kibana", using="u", kibana=None)
 
     controls = Visualization()
     controls.meta.index = ".kibana"
@@ -337,7 +343,9 @@ def test_visualization_index_filters_and_related_search():
         models, "get_index_pattern_or_data_view", return_value="inline"
     ) as getter:
         assert plain.index(using="u") == "inline"
-    getter.assert_called_once_with("index-pattern:inline", ".kibana", using="u")
+    getter.assert_called_once_with(
+        "index-pattern:inline", ".kibana", using="u", kibana=None
+    )
 
     missing = Visualization()
     missing.meta.index = ".kibana"
