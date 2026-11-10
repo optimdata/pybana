@@ -186,7 +186,7 @@ class Kibana(KibanaInterface):
             # raise RuntimeError(f"unexpected class: {es.__class__.__name__}: {es}")
             return es
         es_ext = ElasticsearchExtClient(es)
-        if isinstance(using, str):
+        if isinstance(using, str):  # pragma: no cover
             elasticsearch_dsl.connections.add_connection(using, es_ext)
         return es_ext
 
@@ -301,7 +301,7 @@ class Kibana(KibanaInterface):
         self,
         klass: type[DocumentT],
         ids: Optional[List[str]] = None,
-        raise_on_missing=True,
+        raise_on_missing=False,
     ) -> List[DocumentT]:
         if ids is None:
             values = self._cache_get_all(klass=klass)
@@ -311,6 +311,19 @@ class Kibana(KibanaInterface):
             for v in values:
                 assert v is None or isinstance(v, klass)
             return self._cache_set_all(klass=klass, documents=values)
+        documents = self._get_multi_documents(
+            klass=klass, ids=ids, raise_on_missing=raise_on_missing
+        )
+        if raise_on_missing and len(documents) != len(ids):
+            raise NotFoundError()
+        return documents
+
+    def _get_multi_documents(
+        self,
+        klass: type[DocumentT],
+        ids: List[str],
+        raise_on_missing=True,
+    ) -> List[DocumentT]:
         if not ids:
             return []
         documents, short_ids = self._cache_get_multi(
@@ -323,7 +336,6 @@ class Kibana(KibanaInterface):
 
         # raise RuntimeError(f"shouldn't arrive here: {self._cache}")
         try:
-
             response = self.get_es(using=None).mget(
                 body={"ids": doc_ids}, index=self._index, doc_type="doc"
             )
@@ -494,14 +506,14 @@ class Kibana(KibanaInterface):
         return self.objects("index-pattern", using=using)
 
     def all_index_patterns(
-        self, ids: Optional[List[str]] = None, raise_on_missing=True
+        self, ids: Optional[List[str]] = None, raise_on_missing=False
     ) -> List[IndexPattern]:
         return self.all_documents(
             IndexPattern, ids=ids, raise_on_missing=raise_on_missing
         )
 
     def index_pattern(
-        self, id, using=None, raise_on_missing=True
+        self, id, using=None, raise_on_missing=False
     ) -> Optional[IndexPattern]:
         """
         Return a index-pattern identified by its identifier.
@@ -533,7 +545,7 @@ class Kibana(KibanaInterface):
         return self.objects("visualization", using=using)
 
     def all_visualizations(
-        self, ids: Optional[List[str]] = None, raise_on_missing=True
+        self, ids: Optional[List[str]] = None, raise_on_missing=False
     ) -> List[Visualization]:
         return self.all_documents(
             Visualization, ids=ids, raise_on_missing=raise_on_missing
@@ -558,7 +570,7 @@ class Kibana(KibanaInterface):
         return self.objects("dashboard", using=using)
 
     def all_dashboards(
-        self, ids: Optional[List[str]] = None, raise_on_missing=True
+        self, ids: Optional[List[str]] = None, raise_on_missing=False
     ) -> List[Dashboard]:
         """
         Return a Search to all the index-patterns.

@@ -2,6 +2,7 @@
 
 import os
 import sys
+import unittest
 
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
@@ -128,7 +129,7 @@ def _get_clients(version, start_cache, pybana_postfix):
     return elastic, kibana
 
 
-class TestPybana:
+class TestPybana(unittest.TestCase):
 
     @parameterized.expand(get_versions_and_cache())
     def test_client(self, version, start_cache):
@@ -152,6 +153,7 @@ class TestPybana:
         visualization.visState
         visualization.uiStateJSON
         assert visualization.index(using=elastic).meta.id == index_pattern.meta.id
+        assert visualization.index(kibana=kibana).meta.id == index_pattern.meta.id
         dashboards = list(kibana.dashboards())
         assert len(dashboards) == 1
         dashboard = kibana.dashboard("f57a7160-fb18-11e9-84e4-078763638bf3")
@@ -168,6 +170,102 @@ class TestPybana:
         visualization = kibana.visualization("4a23d096-541b-4638-bb4a-441fd9ed5ef4")
         with pytest.raises(ValueError):
             visualization.index(using=elastic).meta.id
+
+    @parameterized.expand(get_allowed_versions(["v8"]) or ["skip"])
+    def test_get_es(self, version):
+        if version != "v8":
+            self.skipTest("only for v8")
+        index = "test_get_es"
+        _initialize_data(version, index)
+        kibana = Kibana(
+            index=index,
+            using=elasticsearch_dsl.connections.get_connection(version),
+            start_cache=False,
+        )
+        es = ELASTIC_ORIGINS[version]
+        elasticsearch_dsl.connections.add_connection("mock_es", es)
+        elasticsearch_dsl.connections.add_connection("mock_es2", "blabla")
+        self.assertIsInstance(kibana.get_es(using="mock_es"), ElasticsearchExtClient)
+        self.assertEqual(kibana.get_es("mock_es2"), "blabla")
+
+    @parameterized.expand(get_versions_and_cache())
+    def test_kibana_limit_cases(self, version: str, start_cache: bool):
+        index = "test_kibana_limit_cases"
+        _initialize_data(
+            version,
+            index,  # f".kibana_pybana_translators_{'c' if start_cache else 's'}"
+        )
+        kibana = Kibana(
+            index=index,
+            using=elasticsearch_dsl.connections.get_connection(version),
+            start_cache=start_cache,
+        )
+        elastic = ELASTIC_CLIENTS[version]
+
+        origin_mget = elastic.mget
+
+        def my_mget(body, index=None, doc_type=None, **kwargs):
+            raise NotFoundError("for testing")
+
+        try:
+            self.assertIsNone(
+                kibana.get_document(Visualization, "unknown", raise_on_missing=False)
+            )
+            with self.assertRaises(NotFoundError):
+                kibana.get_document(Visualization, "unknown", raise_on_missing=True)
+            kibana.cache_clear()
+            if kibana._cache is not None:  # after putting in cache
+                with self.assertRaises(NotFoundError):
+                    kibana.get_document(Visualization, "unknown", raise_on_missing=True)
+            self.assertEqual(
+                kibana.all_documents(
+                    Visualization, ids=["missing", "other"], raise_on_missing=False
+                ),
+                [],
+            )
+            if kibana._cache is not None:
+                with self.assertRaises(NotFoundError):
+                    kibana.cache_clear()
+                    self.assertEqual(
+                        kibana.all_documents(
+                            Visualization,
+                            ids=["missing", "other"],
+                            raise_on_missing=True,
+                        ),
+                        [],
+                    )
+            elastic.mget = my_mget
+            kibana.cache_clear()
+            self.assertEqual(
+                kibana.all_documents(
+                    Visualization, ids=["missing", "other"], raise_on_missing=False
+                ),
+                [],
+            )
+            with self.assertRaises(NotFoundError):
+                kibana.cache_clear()
+                kibana.all_documents(
+                    Visualization, ids=["missing", "other"], raise_on_missing=True
+                )
+            if kibana._cache is not None:
+                with self.assertRaises(NotFoundError):
+                    kibana.all_documents(
+                        Visualization, ids=["missing", "other"], raise_on_missing=True
+                    )
+                kibana.cache_clear()
+                self.assertEqual(
+                    kibana.all_documents(
+                        Visualization, ids=["missing", "other"], raise_on_missing=False
+                    ),
+                    [],
+                )
+                with self.assertRaises(NotFoundError):
+                    kibana.all_documents(
+                        Visualization, ids=["missing", "other"], raise_on_missing=True
+                    )
+        finally:
+            print("restore mget")
+            elastic.mget = origin_mget
 
     @parameterized.expand(get_versions_and_cache())
     def test_translators(self, version, start_cache):
@@ -439,16 +537,16 @@ class TestPybana:
 
     @parameterized.expand(get_allowed_versions(versions=["v8"]) or ["ignore"])
     def test_get_es_wraps_unextended_clients(self, version):
-        if version == "ignore":  # due to issue on skip on empty
-            return
-        assert version == "v8"
+        if version != "v8":  # due to issue on skip on empty
+            self.skipTest(f"only v8 supported, not {version}")
         es = ELASTIC_ORIGINS["v8"]
+        es_v6 = ELASTIC_ORIGINS.get("v6")
+        if es_v6 is None:
+            self.skipTest("v6 should be defined")
         kibana = Kibana(using=es, index=PYBANA_INDEX)
         odd = object()
         elasticsearch_dsl.connections.add_connection("pybana-odd", odd)
-        elasticsearch_dsl.connections.add_connection(
-            "pybana-raw", ELASTIC_ORIGINS["v6"]
-        )
+        elasticsearch_dsl.connections.add_connection("pybana-raw", es_v6)
         try:
             assert kibana.get_es("pybana-odd") is odd
             wrapped_direct = kibana.get_es(es)

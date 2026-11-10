@@ -8,6 +8,7 @@ import sys
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
 
+from typing import Optional, List  # noqa: E402
 from unittest.mock import patch  # noqa: E402
 
 import pytest  # noqa: E402
@@ -18,7 +19,9 @@ from pybana.models import (  # noqa: E402
     Config,
     Dashboard,
     DataView,
+    DocumentT,
     IndexPattern,
+    KibanaInterface,
     Search,
     Visualization,
     get_index_pattern_or_data_view,
@@ -72,6 +75,25 @@ class _Search(object):
         return _Response(self.responses.get(self.obj_type, []))
 
 
+class _MyMockKibana(KibanaInterface):
+    def get_document(
+        self, klass: type[DocumentT], id: str, using=None, raise_on_missing=True
+    ) -> Optional[DocumentT]:
+        return f"{klass._type}:{id}"
+
+    def all_documents(
+        self,
+        klass: type[DocumentT],
+        ids=None,
+        raise_on_missing=True,
+    ) -> List[DocumentT]:
+        if ids is None:
+            return [self.get_document(klass, "0")]
+        else:
+            return [self.get_document(klass, id) for id in ids]
+        raise NotImplementedError()  # pragma: no cover
+
+
 def test_json_attributes_are_cached_and_default_to_null():
     pattern = IndexPattern.from_es(
         _hit(
@@ -111,6 +133,16 @@ def test_from_es_captures_kibana_references():
 
 
 def test_get_index_pattern_or_data_view():
+    kibana = _MyMockKibana()
+    assert (
+        get_index_pattern_or_data_view("data-view:1", ".kibana", kibana=kibana)
+        == "data-view:1"
+    )
+    assert (
+        get_index_pattern_or_data_view("index-pattern:2", ".kibana", kibana=kibana)
+        == "index-pattern:2"
+    )
+
     with patch.object(DataView, "get", return_value="view") as view_get:
         with patch.object(IndexPattern, "get", return_value="pattern") as pattern_get:
             assert (
@@ -125,6 +157,7 @@ def test_get_index_pattern_or_data_view():
                 )
                 == "pattern"
             )
+    # test without kibana
     view_get.assert_called_once_with(id="data-view:1", index=".kibana", using="u")
     pattern_get.assert_called_once_with(
         id="index-pattern:2", index=".kibana", using="u"
@@ -412,6 +445,7 @@ def test_dashboard_loads_visualizations_and_searches():
     assert dashboard.optionsJSON == {}
     with patch.object(Visualization, "mget", return_value=["vis"]) as visualizations:
         assert dashboard.visualizations(using="u") == ["vis"]
+    assert dashboard.visualizations(kibana=_MyMockKibana()) == ["visualization:v1"]
     visualizations.assert_called_once_with(
         docs=["visualization:v1"], index=".kibana", missing="skip", using="u"
     )

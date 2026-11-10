@@ -64,7 +64,7 @@ class KibanaInterface:
     def get_document(
         self, klass: type[DocumentT], id: str, using=None, raise_on_missing=True
     ) -> Optional[DocumentT]:
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
     @abstractmethod
     def all_documents(
@@ -73,7 +73,7 @@ class KibanaInterface:
         ids: Optional[List[str]] = None,
         raise_on_missing=True,
     ) -> List[DocumentT]:
-        raise NotImplementedError()
+        raise NotImplementedError()  # pragma: no cover
 
 
 def get_index_pattern_or_data_view(
@@ -212,7 +212,9 @@ class Visualization(KibanaSavedObjectReferencesMixin, BaseDocument):
             using=using,
         )
 
-    def index(self, using=None, raise_error=True, kibana: Optional[KibanaInterface] = None):
+    def index(
+        self, using=None, raise_error=True, kibana: Optional[KibanaInterface] = None
+    ):
         """
         Returns the index-pattern associated to the visualization. Go through the
         search if needed.
