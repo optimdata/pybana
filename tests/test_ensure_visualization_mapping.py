@@ -3,6 +3,7 @@
 import os
 import sys
 from unittest import TestCase, mock
+from parameterized import parameterized
 
 BASE_DIRECTORY = os.path.join(os.path.dirname(__file__), "..")  # NOQA
 sys.path.insert(0, BASE_DIRECTORY)  # NOQA
@@ -47,7 +48,7 @@ COMPLETE_MAPPING = {
 
 
 class TestEnsureVisualizationMapping(TestCase):
-    def _kibana_with_es(self, exists=True, mapping=None):
+    def _kibana_with_es(self, exists=True, mapping=None, start_cache: bool = False):
         elastic = mock.MagicMock()
         elastic.version_major = 8
         elastic.indices.exists.return_value = exists
@@ -55,23 +56,38 @@ class TestEnsureVisualizationMapping(TestCase):
         # Bypass Kibana.__init__ / get_es (would require a real ES client).
         kibana = Kibana.__new__(Kibana)
         kibana._default = elastic
+        kibana._cache = None
         kibana._index = ".kibana_wendt_analytics"
+        if start_cache:
+            kibana.cache_initialize()
+        else:
+            kibana.cache_stop()
         return kibana, elastic
 
-    def test_needs_update_when_vis_state_missing(self):
-        kibana, _ = self._kibana_with_es(mapping=INCOMPLETE_ANALYTICS_MAPPING)
+    @parameterized.expand([False, True])
+    def test_needs_update_when_vis_state_missing(self, start_cache):
+        kibana, _ = self._kibana_with_es(
+            mapping=INCOMPLETE_ANALYTICS_MAPPING, start_cache=start_cache
+        )
         self.assertTrue(kibana.visualization_mapping_needs_update())
 
-    def test_needs_update_false_when_vis_state_present(self):
-        kibana, _ = self._kibana_with_es(mapping=COMPLETE_MAPPING)
+    @parameterized.expand([False, True])
+    def test_needs_update_false_when_vis_state_present(self, start_cache):
+        kibana, _ = self._kibana_with_es(
+            mapping=COMPLETE_MAPPING, start_cache=start_cache
+        )
         self.assertFalse(kibana.visualization_mapping_needs_update())
 
-    def test_needs_update_false_when_index_missing(self):
-        kibana, _ = self._kibana_with_es(exists=False)
+    @parameterized.expand([False, True])
+    def test_needs_update_false_when_index_missing(self, start_cache):
+        kibana, _ = self._kibana_with_es(exists=False, start_cache=start_cache)
         self.assertFalse(kibana.visualization_mapping_needs_update())
 
-    def test_ensure_puts_mapping_and_reindexes(self):
-        kibana, elastic = self._kibana_with_es(mapping=INCOMPLETE_ANALYTICS_MAPPING)
+    @parameterized.expand([False, True])
+    def test_ensure_puts_mapping_and_reindexes(self, start_cache):
+        kibana, elastic = self._kibana_with_es(
+            mapping=INCOMPLETE_ANALYTICS_MAPPING, start_cache=start_cache
+        )
         updated = kibana.ensure_visualization_mapping(reindex=True)
         self.assertTrue(updated)
         elastic.indices.put_mapping.assert_called_once_with(
@@ -91,21 +107,30 @@ class TestEnsureVisualizationMapping(TestCase):
             wait_for_completion=True,
         )
 
-    def test_ensure_skips_when_already_mapped(self):
-        kibana, elastic = self._kibana_with_es(mapping=COMPLETE_MAPPING)
+    @parameterized.expand([False, True])
+    def test_ensure_skips_when_already_mapped(self, start_cache):
+        kibana, elastic = self._kibana_with_es(
+            mapping=COMPLETE_MAPPING, start_cache=start_cache
+        )
         updated = kibana.ensure_visualization_mapping(reindex=True)
         self.assertFalse(updated)
         elastic.indices.put_mapping.assert_not_called()
         elastic.update_by_query.assert_not_called()
 
-    def test_ensure_can_skip_reindex(self):
-        kibana, elastic = self._kibana_with_es(mapping=INCOMPLETE_ANALYTICS_MAPPING)
+    @parameterized.expand([False, True])
+    def test_ensure_can_skip_reindex(self, start_cache):
+        kibana, elastic = self._kibana_with_es(
+            mapping=INCOMPLETE_ANALYTICS_MAPPING, start_cache=start_cache
+        )
         kibana.ensure_visualization_mapping(reindex=False)
         elastic.indices.put_mapping.assert_called_once()
         elastic.update_by_query.assert_not_called()
 
-    def test_init_index_ensures_mapping_on_existing_index(self):
-        kibana, elastic = self._kibana_with_es(mapping=INCOMPLETE_ANALYTICS_MAPPING)
+    @parameterized.expand([False, True])
+    def test_init_index_ensures_mapping_on_existing_index(self, start_cache):
+        kibana, elastic = self._kibana_with_es(
+            mapping=INCOMPLETE_ANALYTICS_MAPPING, start_cache=start_cache
+        )
         # Index alias already exists → create path skipped, ensure still runs.
         elastic.indices.exists.return_value = True
         kibana.init_index()
